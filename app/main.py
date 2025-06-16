@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from users import models
 from users.db import engine
-from users.routers import router
+from users.routes import router
 
 app = FastAPI()
 
