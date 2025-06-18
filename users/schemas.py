@@ -1,29 +1,20 @@
 from pydantic import BaseModel
-from typing import Optional
-from enum import Enum
+
+class UserProfile(BaseModel):
+    first_name: str
+    last_name: str
+    phone_number: str
+    date_of_birth: str
+    is_parent: bool
 
 class UserBase(BaseModel):
-    username: str
+    firebase_uid: str
     email: str
+    username: str
 
-class UserIn(UserBase):
-    password: str
-
-class UserInDBBase(UserBase):
-    id: int
-    # is_active: bool = True
-    # is_superuser: bool = False
-    # is_verified: bool = False
-
-    class Config:
-        from_attributes = True
-
-class UserInDB(UserInDBBase):
-    hashed_password: str
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-class Token(BaseModel):
-    access_token: str
-    token_type: str
+class UserOut(UserBase):
+    first_name: str
+    last_name: str
+    phone_number: str
+    date_of_birth: str
+    is_parent: bool

@@ -5,9 +5,10 @@ python-jose
 passlib
 pymysql
 python-multipart
-bcrypt
 langchain
 langchain-community
 langchain-groq
 dotenv
 openai
+firebase
+groq

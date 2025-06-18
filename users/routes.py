@@ -1,16 +1,15 @@
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.security import OAuth2PasswordRequestForm
+
+from firebase_admin import auth as firebase_auth
 from sqlalchemy.orm import Session
 
-from langchain_community.llms import OpenAI
+from pydantic import BaseModel
+
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-
-from openai import OpenAI
-
-from langchain_groq import ChatGroq
 
 from users import auth, models, schemas, security
 from users.db import get_db
@@ -23,53 +22,52 @@ import os
 load_dotenv(find_dotenv())
 
 client = Groq()
-
 router = APIRouter()
-
-@router.post("/register", response_model=schemas.UserInDBBase)
-async def register(user_in: schemas.UserIn, db: Session = Depends(get_db)):
-    db_user = auth.get_user(db, username=user_in.username)
-    if db_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
-    db_user = db.query(models.User).filter(models.User.email == user_in.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
     
-    hashed_password = security.get_password_hash(user_in.password)
-    db_user = models.User(
-        **user_in.model_dump(exclude={"password"}), hashed_password=hashed_password
-    )
+@router.post("/profile")
+def save_profile(
+    profile: schemas.UserProfile,
+    user: models.User = Depends(auth.verify_firebase_token),
+    db: Session = Depends(get_db)
+):
+    db_user = auth.get_user(db, username=user.username)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    db_user.first_name = profile.first_name
+    db_user.last_name = profile.last_name
+    db_user.phone_number = profile.phone_number
+    db_user.date_of_birth = profile.date_of_birth
+    db_user.is_parent = profile.is_parent
+    
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
-
-@router.post("/token", response_model=schemas.Token)
-async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
-    user = auth.get_user(db, username=form_data.username)
-    if not user or not security.pwd_context.verify(form_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
     
-    access_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"message": "Profile updated successfully", "user_id": user["uid"]}
+
+@router.get("/me")
+def get_my_profile(user=Depends(auth.verify_firebase_token)):
+    try:
+        user_info = firebase_auth.get_user(user["uid"])
+        return {
+            "uid": user_info.uid,
+            "email": user_info.email,
+            "display_name": user_info.display_name,
+            "phone_number": user_info.phone_number,
+            "disabled": user_info.disabled
+        }
+    except firebase_auth.AuthError as e:
+        raise HTTPException(status_code=400, detail=f"Error fetching user profile: {str(e)}")
+    
+
 
 @router.get("/conversation")
 async def read_conversation(
     query: str,
-    current_user: models.User = Depends(auth.get_current_user),
+    user: models.User = Depends(auth.verify_firebase_token),
     db: Session = Depends(get_db)
 ):
-    db_user = auth.get_user(db, username=current_user.username)
+    db_user = auth.get_user(db, username=user.username)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     context = generate_context(db_user)

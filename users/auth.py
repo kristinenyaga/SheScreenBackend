@@ -1,35 +1,12 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from firebase_admin import auth as firebase_auth
 
-from users import models, schemas, security
-from users.db import get_db
+security = HTTPBearer()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-def get_user(db: Session, username: int):
-    return db.query(models.User).filter(models.User.username == username).first()
-
-async def get_current_user(
-        token: str = Depends(oauth2_scheme),
-        db: Session = Depends(get_db)
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-        token_data = schemas.TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-
-    user = get_user(db, username=token_data.username)
-    if user is None:
-        raise credentials_exception
-    return user
+        decoded_token = firebase_auth.verify_id_token(credentials.credentials)
+        return decoded_token
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Firebase token")
