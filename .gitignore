@@ -1,3 +1,5 @@
 venv
 shescreen-env
 /.env
+__pycache__/
+*.pyc
