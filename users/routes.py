@@ -26,19 +26,27 @@ client = Groq()
 
 router = APIRouter()
 
+
 @router.post("/register", response_model=schemas.UserInDBBase)
 async def register(user_in: schemas.UserIn, db: Session = Depends(get_db)):
-    db_user = auth.get_user(db, username=user_in.username)
-    if db_user:
-        raise HTTPException(status_code=400, detail="Username already registered")
-    db_user = db.query(models.User).filter(models.User.email == user_in.email).first()
+    db_user = db.query(models.User).filter(
+        models.User.email == user_in.email).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     hashed_password = security.get_password_hash(user_in.password)
+
     db_user = models.User(
-        **user_in.model_dump(exclude={"password"}), hashed_password=hashed_password
+        email=user_in.email,
+        first_name="", 
+        last_name="",  
+        phone_number="", 
+        date_of_birth=None, 
+        is_parent=False,
+        role=models.UserRole.PATIENT,
+        hashed_password=hashed_password
     )
+
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -49,19 +57,35 @@ async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = auth.get_user(db, username=form_data.username)
+    user = db.query(models.User).filter(
+        models.User.email == form_data.username).first()
     if not user or not security.pwd_context.verify(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
     access_token_expires = timedelta(minutes=security.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/profile",response_model=schemas.UserInDBBase)
+async def profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+        db_user = db.query(models.User).filter(
+            models.User.id == current_user.id).first()
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        update_data = user_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_user, key, value)
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
 
 @router.get("/conversation")
 async def read_conversation(
@@ -69,12 +93,12 @@ async def read_conversation(
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
-    db_user = auth.get_user(db, username=current_user.username)
+    db_user = auth.get_user(db, email=current_user.email)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     context = generate_context(db_user)
     prompt = qa_template.format(
-        username=db_user.username,
+        email=db_user.email,
         context=context,
         question=query
     )
@@ -133,4 +157,4 @@ async def read_conversation(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM service error: {e}")
 
-    return structure_response(query, raw_response, db_user.username)
+    return structure_response(query, raw_response, db_user.email)

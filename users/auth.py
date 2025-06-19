@@ -8,8 +8,8 @@ from users.db import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-def get_user(db: Session, username: int):
-    return db.query(models.User).filter(models.User.username == username).first()
+def get_user(db: Session, email: int):
+    return db.query(models.User).filter(models.User.email == email).first()
 
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
@@ -22,14 +22,14 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(token, security.SECRET_KEY, algorithms=[security.ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        email: str = payload.get("sub")
+        if email is None:
             raise credentials_exception
-        token_data = schemas.TokenData(username=username)
+        token_data = schemas.TokenData(email=email)
     except JWTError:
         raise credentials_exception
 
-    user = get_user(db, username=token_data.username)
+    user = get_user(db, email=token_data.email)
     if user is None:
         raise credentials_exception
     return user
