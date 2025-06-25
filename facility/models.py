@@ -11,3 +11,5 @@ class Facility(Base):
     name = Column(String(100), nullable=False)
     region = Column(String(100), nullable=False)
     contact_number = Column(String(100), nullable=True)
+
+    users = relationship("FacilityUser", back_populates="facility")
