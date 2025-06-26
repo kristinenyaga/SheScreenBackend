@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean, Date, Enum as SqlEnum
+from sqlalchemy.orm import relationship
 from users.db import Base
 import enum
 
@@ -24,3 +25,5 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     is_verified = Column(Boolean, default=False)
+
+    care_plans = relationship("CarePlan", back_populates="user")

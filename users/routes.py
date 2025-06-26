@@ -72,7 +72,7 @@ async def login_for_access_token(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
-@router.post("/profile",response_model=schemas.UserInDBBase)
+@router.patch("/profile",response_model=schemas.UserInDBBase)
 async def profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
         db_user = db.query(models.User).filter(
             models.User.id == current_user.id).first()
@@ -86,6 +86,12 @@ async def profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db)
         db.commit()
         db.refresh(db_user)
         return db_user
+
+
+@router.get("/profile", response_model=schemas.UserInDBBase)
+async def get_loggedin_user(current_user: models.User = Depends(auth.get_current_user)):
+    return current_user
+
 
 @router.get("/conversation")
 async def read_conversation(

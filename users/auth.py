@@ -8,7 +8,7 @@ from users.db import get_db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-def get_user(db: Session, email: int):
+def get_user(db: Session, email: str):
     return db.query(models.User).filter(models.User.email == email).first()
 
 async def get_current_user(

@@ -20,11 +20,11 @@ class UserBase(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    first_name: Optional[str]
-    last_name: Optional[str]
-    phone_number: Optional[str]
-    date_of_birth: Optional[date]
-    is_parent: Optional[bool]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    is_parent: Optional[bool] = None
 
 class UserIn(BaseModel):
     email:EmailStr
