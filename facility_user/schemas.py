@@ -19,3 +19,6 @@ class FacilityUserCreate(FacilityUserBase):
 class FacilityUserResponse(FacilityUserBase):
     id: int
     facility_id: int
+
+    class Config:
+        from_attributes = True

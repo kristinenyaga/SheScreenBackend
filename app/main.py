@@ -8,6 +8,8 @@ from users.routes import router as users_routes
 from messages.routes import router as messages_routes
 from facility.routes import router as facility_routes
 from facility_user.routes import router as facility_user_routes
+from resources.routes import router as resource_routes
+
 
 
 app = FastAPI()
@@ -26,6 +28,8 @@ app.include_router(users_routes)
 app.include_router(messages_routes)
 app.include_router(facility_routes)
 app.include_router(facility_user_routes)
+app.include_router(resource_routes)
+
 
 
 if __name__ == "__main__":
