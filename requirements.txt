@@ -12,3 +12,4 @@ dotenv
 openai
 firebase
 groq
+mysqlclient
