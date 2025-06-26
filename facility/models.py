@@ -14,3 +14,4 @@ class Facility(Base):
 
     users = relationship("FacilityUser", back_populates="facility")
     resources = relationship("Resource", back_populates="facility")
+    service_costs = relationship("ServiceCost", back_populates="facility")
