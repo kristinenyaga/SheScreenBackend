@@ -10,7 +10,7 @@ from facility.routes import router as facility_routes
 from facility_user.routes import router as facility_user_routes
 from resources.routes import router as resource_routes
 from service_cost.routes import router as service_cost_routes
-
+from care_plan.routes import router as care_plan_routes
 
 
 app = FastAPI()
@@ -31,6 +31,8 @@ app.include_router(facility_routes)
 app.include_router(facility_user_routes)
 app.include_router(resource_routes)
 app.include_router(service_cost_routes)
+app.include_router(care_plan_routes)
+
 
 
 

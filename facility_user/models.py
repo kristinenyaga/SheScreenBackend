@@ -15,3 +15,4 @@ class FacilityUser(Base):
 
   facility_id =Column(Integer,ForeignKey("facilities.id"))
   facility =relationship("Facility",back_populates="users")
+  created_care_plans=relationship("CarePlan",back_populates="creator")
