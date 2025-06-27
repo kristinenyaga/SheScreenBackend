@@ -1,4 +1,8 @@
 venv
 shescreen-env
 /.env
+__pycache__/
+*.pyc
 /shescreen-884dd-firebase-adminsdk-fbsvc-ef394188b5.json
+/models
+/pipelines

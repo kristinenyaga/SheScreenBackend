@@ -4,7 +4,7 @@ def generate_context(user: User):
     context = f"""
     User Profile:
     ID: {user.id}
-    Username: {user.username}
+    Username: {user.first_name} {user.last_name}
     Email: {user.email}
     """
     return context

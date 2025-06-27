@@ -5,8 +5,8 @@ from datetime import date
 
 
 class UserRole(str, Enum):
-    patient = "patient"
-    staff = "staff"
+    PATIENT = "PATIENT"
+    STAFF = "STAFF"
 
 
 class UserBase(BaseModel):
@@ -15,8 +15,9 @@ class UserBase(BaseModel):
     phone_number: Optional[str] = None
     email: EmailStr
     date_of_birth: date | None = None
-    is_parent: bool = False  
-    role: UserRole = UserRole.patient
+    is_parent: bool = False
+    region: Optional[str] = None  
+    role: UserRole = UserRole.PATIENT
 
 
 class UserUpdate(BaseModel):
@@ -25,6 +26,19 @@ class UserUpdate(BaseModel):
     phone_number: Optional[str] = None
     date_of_birth: Optional[date] = None
     is_parent: Optional[bool] = None
+    region: Optional[str] = None
+
+class RiskAssessmentUpdate(BaseModel):
+    number_of_sexual_partners: int
+    first_sexual_intercourse_age: int
+    smoking_status: str
+    stds_history: str
+
+class RiskAssessmentCreate(BaseModel):
+    number_of_sexual_partners: int
+    first_sexual_intercourse_age: int
+    smoking_status: str
+    stds_history: str    
 
 class UserIn(BaseModel):
     email:EmailStr
@@ -48,3 +62,90 @@ class Token(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Risk Prediction Response Schemas
+class ScreeningRecommendation(BaseModel):
+    recommended_screenings: list[str]
+    reason: str
+    urgency: str
+    frequency: str
+    additional_services: list[str]
+
+
+class FacilityEquipment(BaseModel):
+    name: str
+    quantity: int
+
+
+class RecommendedFacility(BaseModel):
+    facility_id: int
+    facility_name: str
+    region: str
+    contact_number: Optional[str]
+    screening_type: str
+    available_equipment: list[FacilityEquipment]
+    distance_priority: str
+
+
+class UserLocation(BaseModel):
+    region: Optional[str]
+    message: str
+
+
+class FacilityRecommendations(BaseModel):
+    nearby_facilities: list[RecommendedFacility]
+    other_facilities: list[RecommendedFacility]
+    total_count: int
+
+
+class PredictionResult(BaseModel):
+    cluster: int
+    interpretation: str
+    screening_recommendations: ScreeningRecommendation
+
+
+class RiskPredictionSummary(BaseModel):
+    risk_level: str
+    next_steps: list[str]
+    reason: str
+    additional_services: list[str]
+    location_note: str
+
+
+class RiskPredictionResponse(BaseModel):
+    user_id: int
+    user_location: UserLocation
+    risk_assessment: dict
+    prediction: PredictionResult
+    recommended_facilities: FacilityRecommendations
+    summary: RiskPredictionSummary
+
+class RiskPredictionInDB(BaseModel):
+    id: int
+    user_id: int
+    # Risk assessment data
+    number_of_sexual_partners: int
+    first_sexual_intercourse_age: int
+    smoking_status: str
+    stds_history: str
+    age_at_assessment: int
+    # Prediction results
+    cluster: int
+    interpretation: str
+    risk_level: str
+    recommended_screenings: Optional[str]
+    reason: Optional[str]
+    urgency: Optional[str]
+    frequency: Optional[str]
+    additional_services: Optional[str]
+    created_at: date
+
+    class Config:
+        from_attributes = True
+
+
+class RiskPredictionHistory(BaseModel):
+    predictions: list[RiskPredictionInDB]
+    total_count: int
+    latest_prediction: Optional[RiskPredictionInDB]

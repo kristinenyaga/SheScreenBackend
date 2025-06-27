@@ -4,7 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from users import models
 from users.db import engine
-from users.routes import router
+from users.routes import router as users_routes
+from messages.routes import router as messages_routes
+from facility.routes import router as facility_routes
+from facility_user.routes import router as facility_user_routes
+from resources.routes import router as resource_routes
+from service_cost.routes import router as service_cost_routes
+from care_plan.routes import router as care_plan_routes
+
 
 app = FastAPI()
 
@@ -18,7 +25,17 @@ app.add_middleware(
 
 models.Base.metadata.create_all(bind=engine)
 
-app.include_router(router)
+app.include_router(users_routes)
+app.include_router(messages_routes)
+app.include_router(facility_routes)
+app.include_router(facility_user_routes)
+app.include_router(resource_routes)
+app.include_router(service_cost_routes)
+app.include_router(care_plan_routes)
+
+
+
+
 
 if __name__ == "__main__":
     uvicorn.run(

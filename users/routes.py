@@ -1,30 +1,87 @@
 from datetime import timedelta
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from langchain_community.llms import OpenAI
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-
-from openai import OpenAI
-
-from langchain_groq import ChatGroq
-
 from users import auth, models, schemas, security
 from users.db import get_db
+from users.risk_prediction import predict_risk, RiskPredictionData
+from facility.models import Facility
+from resources.models import Resource, ResourceCategory
 from chat.prompts import generate_context, qa_template
 from groq import Groq
 
 from dotenv import load_dotenv, find_dotenv
 import os
+import numpy as np
 
 load_dotenv(find_dotenv())
 
 client = Groq()
 
 router = APIRouter()
+
+
+def find_facilities_with_screening_equipment(db: Session, screening_types: list, user_region: str = None):
+    facilities_with_services = []
+    
+    equipment_mapping = {
+        "Pap Smear": ["Speculum", "Cytology Equipment", "Pap Smear Kit"],
+        "HPV DNA Test": ["HPV Testing Kit", "PCR Machine", "DNA Testing Equipment"], 
+        "HPV Vaccine": ["Vaccine Storage", "Refrigeration Unit", "HPV Vaccine"]
+    }
+    
+    for screening_type in screening_types:
+        if screening_type in equipment_mapping:
+            equipment_names = equipment_mapping[screening_type]
+            
+            # Build base query for facilities with required equipment
+            base_query = db.query(Facility).join(Resource).filter(
+                Resource.category == ResourceCategory.equipment,
+                Resource.name.in_(equipment_names),
+                Resource.quantity_available > 0
+            ).distinct()
+            
+            same_region_facilities = []
+            other_region_facilities = []
+            
+            all_facilities = base_query.all()
+            
+            for facility in all_facilities:
+                facility_info = {
+                    "facility_id": facility.id,
+                    "facility_name": facility.name,
+                    "region": facility.region,
+                    "contact_number": facility.contact_number,
+                    "screening_type": screening_type,
+                    "available_equipment": [],
+                    "distance_priority": "same_region" if user_region and facility.region.lower() == user_region.lower() else "other_region"
+                }
+                
+                available_equipment = db.query(Resource).filter(
+                    Resource.facility_id == facility.id,
+                    Resource.category == ResourceCategory.equipment,
+                    Resource.name.in_(equipment_names),
+                    Resource.quantity_available > 0
+                ).all()
+                
+                for equipment in available_equipment:
+                    facility_info["available_equipment"].append({
+                        "name": equipment.name,
+                        "quantity": equipment.quantity_available
+                    })
+                
+                if user_region and facility.region.lower() == user_region.lower():
+                    same_region_facilities.append(facility_info)
+                else:
+                    other_region_facilities.append(facility_info)
+            
+            facilities_with_services.extend(same_region_facilities)
+            facilities_with_services.extend(other_region_facilities)
+    
+    return facilities_with_services
 
 
 @router.post("/register", response_model=schemas.UserInDBBase)
@@ -164,3 +221,171 @@ async def read_conversation(
         raise HTTPException(status_code=500, detail=f"LLM service error: {e}")
 
     return structure_response(query, raw_response, db_user.email)
+
+@router.post("/risk-assessment", response_model=schemas.RiskPredictionInDB)
+async def create_risk_assessment(
+    risk_data: schemas.RiskAssessmentCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """Create a new risk assessment and get prediction"""
+    db_user = db.query(models.User).filter(
+        models.User.id == current_user.id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if not db_user.date_of_birth:
+        raise HTTPException(status_code=400, detail="Date of birth is required for risk assessment")
+    
+    if risk_data.smoking_status not in ["Yes", "No"]:
+        raise HTTPException(status_code=400, detail="Smoking status must be 'Yes' or 'No'")
+    if risk_data.stds_history not in ["Yes", "No"]:
+        raise HTTPException(status_code=400, detail="STDs history must be 'Yes' or 'No'")
+    if risk_data.number_of_sexual_partners < 0:
+        raise HTTPException(status_code=400, detail="Number of sexual partners cannot be negative")
+    if risk_data.first_sexual_intercourse_age < 0:
+        raise HTTPException(status_code=400, detail="First sexual intercourse age cannot be negative")
+    
+    # Calculate age
+    today = date.today()
+    age = today.year - db_user.date_of_birth.year - (
+        (today.month, today.day) < (db_user.date_of_birth.month, db_user.date_of_birth.day)
+    )
+    
+    # Create prediction data
+    prediction_data = RiskPredictionData(
+        age=float(age),
+        number_of_sexual_partners=risk_data.number_of_sexual_partners,
+        first_sexual_intercourse=risk_data.first_sexual_intercourse_age,
+        smoking_status=risk_data.smoking_status,
+        stds_history=risk_data.stds_history
+    )
+    
+    # Get risk prediction
+    prediction_result = predict_risk(prediction_data)
+    screening_recommendations = prediction_result.get("screening_recommendations", {})
+    
+    # Save to database
+    db_prediction = models.RiskPrediction(
+        user_id=db_user.id,
+        number_of_sexual_partners=risk_data.number_of_sexual_partners,
+        first_sexual_intercourse_age=risk_data.first_sexual_intercourse_age,
+        smoking_status=risk_data.smoking_status,
+        stds_history=risk_data.stds_history,
+        age_at_assessment=age,
+        cluster=prediction_result.get("cluster"),
+        interpretation=prediction_result.get("interpretation"),
+        risk_level=screening_recommendations.get("urgency", "Unknown"),
+        recommended_screenings=",".join(screening_recommendations.get("recommended_screenings", [])),
+        reason=screening_recommendations.get("reason"),
+        urgency=screening_recommendations.get("urgency"),
+        frequency=screening_recommendations.get("frequency"),
+        additional_services=",".join(screening_recommendations.get("additional_services", [])),
+        created_at=date.today()
+    )
+    
+    db.add(db_prediction)
+    db.commit()
+    db.refresh(db_prediction)
+    
+    return db_prediction
+
+@router.get("/risk-prediction", response_model=schemas.RiskPredictionResponse)
+async def get_risk_prediction(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_user = db.query(models.User).filter(
+        models.User.id == current_user.id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get latest risk prediction
+    latest_prediction = db.query(models.RiskPrediction).filter(
+        models.RiskPrediction.user_id == current_user.id
+    ).order_by(models.RiskPrediction.created_at.desc()).first()
+    
+    if not latest_prediction:
+        raise HTTPException(
+            status_code=400, 
+            detail="No risk assessment found. Please create a risk assessment first."
+        )
+    
+    # Rebuild the prediction result for the response
+    screening_recommendations = {
+        "recommended_screenings": latest_prediction.recommended_screenings.split(",") if latest_prediction.recommended_screenings else [],
+        "reason": latest_prediction.reason or "",
+        "urgency": latest_prediction.urgency or "Unknown",
+        "frequency": latest_prediction.frequency or "",
+        "additional_services": latest_prediction.additional_services.split(",") if latest_prediction.additional_services else []
+    }
+    
+    prediction_result = {
+        "cluster": latest_prediction.cluster,
+        "interpretation": latest_prediction.interpretation,
+        "screening_recommendations": screening_recommendations
+    }
+    
+    risk_data = {
+        "age": float(latest_prediction.age_at_assessment),
+        "number_of_sexual_partners": latest_prediction.number_of_sexual_partners,
+        "first_sexual_intercourse": latest_prediction.first_sexual_intercourse_age,
+        "smoking_status": latest_prediction.smoking_status,
+        "stds_history": latest_prediction.stds_history
+    }
+    
+    # Get facility recommendations
+    recommended_facilities = []
+    recommended_screenings = screening_recommendations.get("recommended_screenings", [])
+    
+    if recommended_screenings:
+        equipment_requiring_screenings = [s for s in recommended_screenings if s in ["Pap Smear", "HPV DNA Test", "HPV Vaccine"]]
+        if equipment_requiring_screenings:
+            recommended_facilities = find_facilities_with_screening_equipment(
+                db, 
+                equipment_requiring_screenings, 
+                user_region=db_user.region
+            )
+    
+    same_region_facilities = [f for f in recommended_facilities if f.get("distance_priority") == "same_region"]
+    other_region_facilities = [f for f in recommended_facilities if f.get("distance_priority") == "other_region"]
+    
+    return {
+        "user_id": db_user.id,
+        "user_location": {
+            "region": db_user.region,
+            "message": f"Showing facilities in {db_user.region} first" if db_user.region else "Please update your region for location-based recommendations"
+        },
+        "risk_assessment": risk_data,
+        "prediction": prediction_result,
+        "recommended_facilities": {
+            "nearby_facilities": same_region_facilities,
+            "other_facilities": other_region_facilities,
+            "total_count": len(recommended_facilities)
+        },
+        "summary": {
+            "risk_level": screening_recommendations.get("urgency", "Unknown"),
+            "next_steps": screening_recommendations.get("recommended_screenings", []),
+            "reason": screening_recommendations.get("reason", ""),
+            "additional_services": screening_recommendations.get("additional_services", []),
+            "location_note": f"Found {len(same_region_facilities)} facilities in your region ({db_user.region})" if db_user.region and same_region_facilities else "Consider updating your region for better facility recommendations"
+        }
+    }
+
+
+@router.get("/risk-prediction-history", response_model=schemas.RiskPredictionHistory)
+async def get_risk_prediction_history(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    predictions = db.query(models.RiskPrediction).filter(
+        models.RiskPrediction.user_id == current_user.id
+    ).order_by(models.RiskPrediction.created_at.desc()).all()
+    
+    latest_prediction = predictions[0] if predictions else None
+    
+    return {
+        "predictions": predictions,
+        "total_count": len(predictions),
+        "latest_prediction": latest_prediction
+    }
