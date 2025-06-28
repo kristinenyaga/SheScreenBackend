@@ -8,7 +8,7 @@ class Facility(Base):
     __tablename__ = "facilities"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False)
+    name = Column(String(100),unique=True, nullable=False)
     region = Column(String(100), nullable=False)
     contact_number = Column(String(100), nullable=True)
 

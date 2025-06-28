@@ -11,6 +11,15 @@ class FacilityUserBase(BaseModel):
     phone_number:str
 
 
+class LoginRequest(BaseModel):
+    email: EmailStr
+    hashed_password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+
 class FacilityUserCreate(FacilityUserBase):
     hashed_password: str
     facility_id: int
