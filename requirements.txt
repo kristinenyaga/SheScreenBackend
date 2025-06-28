@@ -61,4 +61,6 @@ typing-inspect
 typing-inspection        
 urllib3                  
 uvicorn                 
-yarl                     
+yarl  
+joblib
+scikit-learn               
