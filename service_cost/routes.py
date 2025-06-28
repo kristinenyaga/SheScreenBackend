@@ -8,7 +8,7 @@ router = APIRouter(prefix="/service-costs")
 
 @router.post("/", response_model=schemas.ServiceCostResponse)
 def create_service_cost(cost: schemas.ServiceCostCreate, db: Session = Depends(get_db)):
-    db_cost = models.ServiceCost(**cost.dict())
+    db_cost = models.ServiceCost(**cost.model_dump())
     db.add(db_cost)
     db.commit()
     db.refresh(db_cost)

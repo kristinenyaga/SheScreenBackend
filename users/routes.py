@@ -9,7 +9,10 @@ from users import auth, models, schemas, security
 from users.db import get_db
 from users.risk_prediction import predict_risk, RiskPredictionData
 from facility.models import Facility
-from resources.models import Resource, ResourceCategory
+from facility_resources.models import FacilityResource
+from service.models import CervicalCancerService
+from service_resource_requirement.models import ServiceResourceRequirement
+from service_cost.models import ServiceCost
 from chat.prompts import generate_context, qa_template
 from groq import Groq
 
@@ -24,65 +27,168 @@ client = Groq()
 router = APIRouter()
 
 
-def find_facilities_with_screening_equipment(db: Session, screening_types: list, user_region: str = None):
-    facilities_with_services = []
+# def find_facilities_with_screening_equipment(db: Session, screening_types: list, user_region: str = None):
+#     facilities_with_services = []
     
-    equipment_mapping = {
-        "Pap Smear": ["Speculum", "Cytology Equipment", "Pap Smear Kit"],
-        "HPV DNA Test": ["HPV Testing Kit", "PCR Machine", "DNA Testing Equipment"], 
-        "HPV Vaccine": ["Vaccine Storage", "Refrigeration Unit", "HPV Vaccine"]
-    }
+#     equipment_mapping = {
+#         "Pap Smear": ["Speculum", "Cytology Equipment", "Pap Smear Kit"],
+#         "HPV DNA Test": ["HPV Testing Kit", "PCR Machine", "DNA Testing Equipment"], 
+#         "HPV Vaccine": ["Vaccine Storage", "Refrigeration Unit", "HPV Vaccine"]
+#     }
     
-    for screening_type in screening_types:
-        if screening_type in equipment_mapping:
-            equipment_names = equipment_mapping[screening_type]
+#     for screening_type in screening_types:
+#         if screening_type in equipment_mapping:
+#             equipment_names = equipment_mapping[screening_type]
             
-            # Build base query for facilities with required equipment
-            base_query = db.query(Facility).join(Resource).filter(
-                Resource.category == ResourceCategory.equipment,
-                Resource.name.in_(equipment_names),
-                Resource.quantity_available > 0
-            ).distinct()
+#             # Build base query for facilities with required equipment
+#             base_query = db.query(Facility).join(FacilityResource).filter(
+#                 FacilityResource.category == ResourceCategory.equipment,
+#                 FacilityResource.name.in_(equipment_names),
+#                 FacilityResource.quantity_available > 0
+#             ).distinct()
             
-            same_region_facilities = []
-            other_region_facilities = []
+#             same_region_facilities = []
+#             other_region_facilities = []
             
-            all_facilities = base_query.all()
+#             all_facilities = base_query.all()
             
-            for facility in all_facilities:
-                facility_info = {
-                    "facility_id": facility.id,
-                    "facility_name": facility.name,
-                    "region": facility.region,
-                    "contact_number": facility.contact_number,
-                    "screening_type": screening_type,
-                    "available_equipment": [],
-                    "distance_priority": "same_region" if user_region and facility.region.lower() == user_region.lower() else "other_region"
-                }
+#             for facility in all_facilities:
+#                 facility_info = {
+#                     "facility_id": facility.id,
+#                     "facility_name": facility.name,
+#                     "region": facility.region,
+#                     "contact_number": facility.contact_number,
+#                     "screening_type": screening_type,
+#                     "available_equipment": [],
+#                     "distance_priority": "same_region" if user_region and facility.region.lower() == user_region.lower() else "other_region"
+#                 }
                 
-                available_equipment = db.query(Resource).filter(
-                    Resource.facility_id == facility.id,
-                    Resource.category == ResourceCategory.equipment,
-                    Resource.name.in_(equipment_names),
-                    Resource.quantity_available > 0
-                ).all()
+#                 available_equipment = db.query(FacilityResource).filter(
+#                     FacilityResource.facility_id == facility.id,
+#                     FacilityResource.category == ResourceCategory.equipment,
+#                     FacilityResource.name.in_(equipment_names),
+#                     FacilityResource.quantity_available > 0
+#                 ).all()
                 
-                for equipment in available_equipment:
-                    facility_info["available_equipment"].append({
-                        "name": equipment.name,
-                        "quantity": equipment.quantity_available
-                    })
+#                 for equipment in available_equipment:
+#                     facility_info["available_equipment"].append({
+#                         "name": equipment.name,
+#                         "quantity": equipment.quantity_available
+#                     })
                 
-                if user_region and facility.region.lower() == user_region.lower():
-                    same_region_facilities.append(facility_info)
-                else:
-                    other_region_facilities.append(facility_info)
+#                 if user_region and facility.region.lower() == user_region.lower():
+#                     same_region_facilities.append(facility_info)
+#                 else:
+#                     other_region_facilities.append(facility_info)
             
-            facilities_with_services.extend(same_region_facilities)
-            facilities_with_services.extend(other_region_facilities)
+#             facilities_with_services.extend(same_region_facilities)
+#             facilities_with_services.extend(other_region_facilities)
     
-    return facilities_with_services
+#     return facilities_with_services
 
+@router.post("/recommended-facilities", response_model=list[schemas.FacilityResponse])
+def get_recommended_facilities(service_name: schemas.RecommendedFacilityQuery, db: Session = Depends(get_db)):
+    service = db.query(CervicalCancerService).filter(
+        CervicalCancerService.name == service_name.screening_type).first()
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+    print("service",service.__dict__)
+    required_resources = db.query(ServiceResourceRequirement).filter(
+        ServiceResourceRequirement.service_id == service.id
+    ).all()
+
+    print("required resources", list[required_resources])
+
+    facilities = db.query(Facility).join(ServiceCost).filter(
+        ServiceCost.service_id == service.id).all()
+
+    recommended_facilities = []
+
+    for facility in facilities:
+        has_all_resources = True
+
+        for requirement in required_resources:
+            facility_resource = db.query(FacilityResource).filter_by(
+                facility_id=facility.id,
+                resource_type_id=requirement.resource_type_id
+            ).first()
+
+            if not facility_resource or facility_resource.quantity_available < requirement.required_quantity:
+                has_all_resources = False
+                break
+
+        if has_all_resources:
+            recommended_facilities.append(facility)
+
+    return recommended_facilities
+
+
+    service = db.query(CervicalCancerService).filter(
+        CervicalCancerService.name == service_name.screening_type).first()
+
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    print("Service:")
+    print(service.__dict__)
+
+    required_resources = db.query(ServiceResourceRequirement).filter(
+        ServiceResourceRequirement.service_id == service.id
+    ).all()
+
+    print("\nRequired Resources:")
+    for r in required_resources:
+        print({
+            "resource_type_id": r.resource_type_id,
+            "required_quantity": r.required_quantity,
+            "service_id": r.service_id
+        })
+
+    facilities = db.query(Facility).join(ServiceCost).filter(
+        ServiceCost.service_id == service.id).all()
+
+    print("Facilities offering this service:")
+    for f in facilities:
+        print({
+            "id": f.id,
+            "name": f.name,
+            "region": f.region
+        })
+
+    recommended_facilities = []
+
+    for facility in facilities:
+        print(f"\n🏥 Checking facility: {facility.name} (ID: {facility.id})")
+        has_all_resources = True
+
+        for requirement in required_resources:
+            facility_resource = db.query(FacilityResource).filter_by(
+                facility_id=facility.id,
+                resource_type_id=requirement.resource_type_id
+            ).first()
+
+            if facility_resource:
+                print(
+                    f"✅ Found resource: type={requirement.resource_type_id}, available={facility_resource.quantity_available}, required={requirement.required_quantity}")
+            else:
+                print(
+                    f"❌ Missing resource type={requirement.resource_type_id} at facility {facility.name}")
+
+            if not facility_resource or facility_resource.quantity_available < requirement.required_quantity:
+                print(
+                    f"❌ Facility {facility.name} does not meet resource requirement.")
+                has_all_resources = False
+                break
+
+        if has_all_resources:
+            print(f"✅ Facility {facility.name} added to recommended list.")
+            recommended_facilities.append(facility)
+
+    print("\n✅ Final Recommended Facilities:")
+    for r in recommended_facilities:
+        print(f"- {r.name} ({r.region})")
+
+    return recommended_facilities
 
 @router.post("/register", response_model=schemas.UserInDBBase)
 async def register(user_in: schemas.UserIn, db: Session = Depends(get_db)):
@@ -116,12 +222,9 @@ async def login_for_access_token(
 ):
     user = db.query(models.User).filter(
         models.User.email == form_data.username).first()
-    user = db.query(models.User).filter(
-        models.User.email == form_data.username).first()
     if not user or not security.pwd_context.verify(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
@@ -131,26 +234,6 @@ async def login_for_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
-
-@router.patch("/profile",response_model=schemas.UserInDBBase)
-async def profile(user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-        db_user = db.query(models.User).filter(
-            models.User.id == current_user.id).first()
-        if not db_user:
-            raise HTTPException(status_code=404, detail="User not found")
-        
-        update_data = user_update.dict(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(db_user, key, value)
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        return db_user
-
-
-@router.get("/profile", response_model=schemas.UserInDBBase)
-async def get_loggedin_user(current_user: models.User = Depends(auth.get_current_user)):
-    return current_user
 
 
 @router.patch("/profile",response_model=schemas.UserInDBBase)

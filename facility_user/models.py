@@ -12,7 +12,7 @@ class FacilityUser(Base):
   email = Column(String(100), unique=True, index=True,nullable=False)  
   role = Column(String(100), nullable=False,)
   hashed_password = Column(String(255))
-
   facility_id =Column(Integer,ForeignKey("facilities.id"))
+  
   facility =relationship("Facility",back_populates="users")
   created_care_plans=relationship("CarePlan",back_populates="creator")

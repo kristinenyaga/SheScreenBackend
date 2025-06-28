@@ -13,5 +13,5 @@ class Facility(Base):
     contact_number = Column(String(100), nullable=True)
 
     users = relationship("FacilityUser", back_populates="facility")
-    resources = relationship("Resource", back_populates="facility")
+    facility_resources = relationship("FacilityResource", back_populates="facility")
     service_costs = relationship("ServiceCost", back_populates="facility")

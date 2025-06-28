@@ -47,8 +47,6 @@ class UserIn(BaseModel):
 class UserInDBBase(UserBase):
     id: int
 
-    class Config:
-        from_attributes = True
 
 class UserInDB(UserInDBBase):
     hashed_password: str
@@ -59,12 +57,6 @@ class TokenData(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
-
-    class Config:
-        from_attributes = True
-
-    class Config:
-        from_attributes = True
 
 
 # Risk Prediction Response Schemas
@@ -90,6 +82,14 @@ class RecommendedFacility(BaseModel):
     available_equipment: list[FacilityEquipment]
     distance_priority: str
 
+class RecommendedFacilityQuery(BaseModel):
+    screening_type:str
+    
+class FacilityResponse(BaseModel):
+    id: int
+    name: str
+    region: str
+    contact_number: Optional[str] = None
 
 class UserLocation(BaseModel):
     region: Optional[str]
@@ -144,11 +144,12 @@ class RiskPredictionInDB(BaseModel):
     additional_services: Optional[str]
     created_at: date
 
-    class Config:
-        from_attributes = True
 
 
 class RiskPredictionHistory(BaseModel):
     predictions: list[RiskPredictionInDB]
     total_count: int
     latest_prediction: Optional[RiskPredictionInDB]
+
+    class Config:
+        from_attributes = True
