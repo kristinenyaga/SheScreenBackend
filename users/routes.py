@@ -294,7 +294,6 @@ def get_recommended_facilities(screening_type: str, db: Session, user_region: st
                 break
 
         if has_all_resources:
-            # Fetch service cost for that facility and service
             cost = db.query(ServiceCost).filter_by(
                 facility_id=facility.id,
                 service_id=service.id
