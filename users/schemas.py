@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional,List
 from enum import Enum
 from datetime import date
 
@@ -85,11 +85,18 @@ class RecommendedFacility(BaseModel):
 class RecommendedFacilityQuery(BaseModel):
     screening_type:str
     
+
+class ServiceCostResponse(BaseModel):
+    base_cost: Optional[float]
+    nhif_covered: bool
+    out_of_pocket: Optional[float]
+    insurance_copay_amount: Optional[float]
 class FacilityResponse(BaseModel):
     id: int
     name: str
     region: str
-    contact_number: Optional[str] = None
+    contact_number: str
+    service_cost: Optional[ServiceCostResponse]
 
 class UserLocation(BaseModel):
     region: Optional[str]
@@ -113,15 +120,19 @@ class RiskPredictionSummary(BaseModel):
     next_steps: list[str]
     reason: str
     additional_services: list[str]
-    location_note: str
+    # location_note: str
 
 
+class RecommendedFacilitiesResponse(BaseModel):
+    nearby_facilities: List[FacilityResponse]
+    other_facilities: List[FacilityResponse]
+    total_count: int
 class RiskPredictionResponse(BaseModel):
     user_id: int
     user_location: UserLocation
     risk_assessment: dict
     prediction: PredictionResult
-    recommended_facilities: FacilityRecommendations
+    recommended_facilities: RecommendedFacilitiesResponse
     summary: RiskPredictionSummary
 
 class RiskPredictionInDB(BaseModel):

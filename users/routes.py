@@ -86,109 +86,41 @@ router = APIRouter()
     
 #     return facilities_with_services
 
-@router.post("/recommended-facilities", response_model=list[schemas.FacilityResponse])
-def get_recommended_facilities(service_name: schemas.RecommendedFacilityQuery, db: Session = Depends(get_db)):
-    service = db.query(CervicalCancerService).filter(
-        CervicalCancerService.name == service_name.screening_type).first()
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
-    print("service",service.__dict__)
-    required_resources = db.query(ServiceResourceRequirement).filter(
-        ServiceResourceRequirement.service_id == service.id
-    ).all()
-
-    print("required resources", list[required_resources])
-
-    facilities = db.query(Facility).join(ServiceCost).filter(
-        ServiceCost.service_id == service.id).all()
-
-    recommended_facilities = []
-
-    for facility in facilities:
-        has_all_resources = True
-
-        for requirement in required_resources:
-            facility_resource = db.query(FacilityResource).filter_by(
-                facility_id=facility.id,
-                resource_type_id=requirement.resource_type_id
-            ).first()
-
-            if not facility_resource or facility_resource.quantity_available < requirement.required_quantity:
-                has_all_resources = False
-                break
-
-        if has_all_resources:
-            recommended_facilities.append(facility)
-
-    return recommended_facilities
+# @router.post("/recommended-facilities", response_model=list[schemas.FacilityResponse])
+# def get_recommended_facilities(service_name: schemas.RecommendedFacilityQuery, db: Session = Depends(get_db)):
+#     service = db.query(CervicalCancerService).filter(
+#         CervicalCancerService.name == service_name.screening_type).first()
+#     if not service:
+#         raise HTTPException(status_code=404, detail="Service not found")
+#     print("service",service.__dict__)
+#     required_resources = db.query(ServiceResourceRequirement).filter(
+#         ServiceResourceRequirement.service_id == service.id
+#     ).all()
 
 
-    service = db.query(CervicalCancerService).filter(
-        CervicalCancerService.name == service_name.screening_type).first()
+#     facilities = db.query(Facility).join(ServiceCost).filter(
+#         ServiceCost.service_id == service.id).all()
 
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
+#     recommended_facilities = []
 
-    print("Service:")
-    print(service.__dict__)
+#     for facility in facilities:
+#         has_all_resources = True
 
-    required_resources = db.query(ServiceResourceRequirement).filter(
-        ServiceResourceRequirement.service_id == service.id
-    ).all()
+#         for requirement in required_resources:
+#             facility_resource = db.query(FacilityResource).filter_by(
+#                 facility_id=facility.id,
+#                 resource_type_id=requirement.resource_type_id
+#             ).first()
 
-    print("\nRequired Resources:")
-    for r in required_resources:
-        print({
-            "resource_type_id": r.resource_type_id,
-            "required_quantity": r.required_quantity,
-            "service_id": r.service_id
-        })
+#             if not facility_resource or facility_resource.quantity_available < requirement.required_quantity:
+#                 has_all_resources = False
+#                 break
 
-    facilities = db.query(Facility).join(ServiceCost).filter(
-        ServiceCost.service_id == service.id).all()
+#         if has_all_resources:
+#             recommended_facilities.append(facility)
 
-    print("Facilities offering this service:")
-    for f in facilities:
-        print({
-            "id": f.id,
-            "name": f.name,
-            "region": f.region
-        })
+#     return recommended_facilities
 
-    recommended_facilities = []
-
-    for facility in facilities:
-        print(f"\n🏥 Checking facility: {facility.name} (ID: {facility.id})")
-        has_all_resources = True
-
-        for requirement in required_resources:
-            facility_resource = db.query(FacilityResource).filter_by(
-                facility_id=facility.id,
-                resource_type_id=requirement.resource_type_id
-            ).first()
-
-            if facility_resource:
-                print(
-                    f"✅ Found resource: type={requirement.resource_type_id}, available={facility_resource.quantity_available}, required={requirement.required_quantity}")
-            else:
-                print(
-                    f"❌ Missing resource type={requirement.resource_type_id} at facility {facility.name}")
-
-            if not facility_resource or facility_resource.quantity_available < requirement.required_quantity:
-                print(
-                    f"❌ Facility {facility.name} does not meet resource requirement.")
-                has_all_resources = False
-                break
-
-        if has_all_resources:
-            print(f"✅ Facility {facility.name} added to recommended list.")
-            recommended_facilities.append(facility)
-
-    print("\n✅ Final Recommended Facilities:")
-    for r in recommended_facilities:
-        print(f"- {r.name} ({r.region})")
-
-    return recommended_facilities
 
 @router.post("/register", response_model=schemas.UserInDBBase)
 async def register(user_in: schemas.UserIn, db: Session = Depends(get_db)):
@@ -329,6 +261,65 @@ async def read_conversation(
 
     return structure_response(query, raw_response, db_user.email)
 
+
+def get_recommended_facilities(screening_type: str, db: Session, user_region: str):
+    service = db.query(CervicalCancerService).filter(
+        CervicalCancerService.name == screening_type).first()
+
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+
+    required_resources = db.query(ServiceResourceRequirement).filter(
+        ServiceResourceRequirement.service_id == service.id
+    ).all()
+
+    facilities = db.query(Facility).join(ServiceCost).filter(
+        ServiceCost.service_id == service.id
+    ).all()
+
+    nearby_facilities = []
+    other_facilities = []
+
+    for facility in facilities:
+        has_all_resources = True
+
+        for requirement in required_resources:
+            facility_resource = db.query(FacilityResource).filter_by(
+                facility_id=facility.id,
+                resource_type_id=requirement.resource_type_id
+            ).first()
+
+            if not facility_resource or facility_resource.quantity_available < requirement.required_quantity:
+                has_all_resources = False
+                break
+
+        if has_all_resources:
+            # Fetch service cost for that facility and service
+            cost = db.query(ServiceCost).filter_by(
+                facility_id=facility.id,
+                service_id=service.id
+            ).first()
+
+            facility_data = {
+                "id": facility.id,
+                "name": facility.name,
+                "region": facility.region,
+                "contact_number": facility.contact_number,
+                "service_cost": cost
+            }
+            print(facility_data)
+
+            if facility.region == user_region:
+                nearby_facilities.append(facility_data)
+            else:
+                other_facilities.append(facility_data)
+
+    return {
+        "nearby_facilities": nearby_facilities,
+        "other_facilities": other_facilities,
+        "total_count": len(nearby_facilities) + len(other_facilities)
+    }
+
 @router.post("/risk-assessment", response_model=schemas.RiskPredictionInDB)
 async def create_risk_assessment(
     risk_data: schemas.RiskAssessmentCreate,
@@ -442,20 +433,17 @@ async def get_risk_prediction(
     }
     
     # Get facility recommendations
-    recommended_facilities = []
     recommended_screenings = screening_recommendations.get("recommended_screenings", [])
     
     if recommended_screenings:
-        equipment_requiring_screenings = [s for s in recommended_screenings if s in ["Pap Smear", "HPV DNA Test", "HPV Vaccine"]]
-        if equipment_requiring_screenings:
-            recommended_facilities = find_facilities_with_screening_equipment(
-                db, 
-                equipment_requiring_screenings, 
-                user_region=db_user.region
+        result = get_recommended_facilities(
+            screening_type="HPV Vaccine",
+            db=db,
+            user_region=db_user.region
             )
+        
+        print("result",result)
     
-    same_region_facilities = [f for f in recommended_facilities if f.get("distance_priority") == "same_region"]
-    other_region_facilities = [f for f in recommended_facilities if f.get("distance_priority") == "other_region"]
     
     return {
         "user_id": db_user.id,
@@ -466,16 +454,16 @@ async def get_risk_prediction(
         "risk_assessment": risk_data,
         "prediction": prediction_result,
         "recommended_facilities": {
-            "nearby_facilities": same_region_facilities,
-            "other_facilities": other_region_facilities,
-            "total_count": len(recommended_facilities)
+            "nearby_facilities": result["nearby_facilities"],
+            "other_facilities": result["other_facilities"],
+            "total_count": result["total_count"]
         },
         "summary": {
             "risk_level": screening_recommendations.get("urgency", "Unknown"),
             "next_steps": screening_recommendations.get("recommended_screenings", []),
             "reason": screening_recommendations.get("reason", ""),
             "additional_services": screening_recommendations.get("additional_services", []),
-            "location_note": f"Found {len(same_region_facilities)} facilities in your region ({db_user.region})" if db_user.region and same_region_facilities else "Consider updating your region for better facility recommendations"
+            # "location_note": f"Found {len(same_region_facilities)} facilities in your region ({db_user.region})" if db_user.region and same_region_facilities else "Consider updating your region for better facility recommendations"
         }
     }
 
