@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 from messages import models as messages_models
 from users.db import get_db
 from users.auth import get_current_user
-from messages.schemas import MessageCreate, MessageOut
+from messages.schemas import MessageCreate, MessageOut, BotConversationOut
 from users import models as users_models
+from typing import List
 import httpx
 
 router = APIRouter()
@@ -51,5 +52,53 @@ def send_message(
             status_code=500, detail=f"Failed to send SMS: {str(e)}")
 
     return db_message
+
+
+@router.post("/save-bot-conversation")
+def save_bot_conversation(
+    user_message: str,
+    bot_response: str,
+    current_user: users_models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    user_db_message = messages_models.Message(
+        user_id=current_user.id,
+        content=user_message,
+        is_bot_message=0,
+        conversation_type="user_to_bot"
+    )
+    db.add(user_db_message)
+    
+    bot_db_message = messages_models.Message(
+        user_id=current_user.id,
+        content=bot_response,
+        is_bot_message=1,
+        conversation_type="user_to_bot"
+    )
+    db.add(bot_db_message)
+    
+    db.commit()
+    db.refresh(user_db_message)
+    db.refresh(bot_db_message)
+    
+    return {
+        "user_message": user_db_message,
+        "bot_response": bot_db_message
+    }
+
+
+@router.get("/bot-conversation-history", response_model=List[BotConversationOut])
+def get_bot_conversation_history(
+    current_user: users_models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    
+    conversations = db.query(messages_models.Message).filter(
+        messages_models.Message.user_id == current_user.id,
+        messages_models.Message.conversation_type == "user_to_bot"
+    ).order_by(messages_models.Message.timestamp.asc()).all()
+    
+    return conversations
 
 

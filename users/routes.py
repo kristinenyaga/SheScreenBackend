@@ -14,6 +14,8 @@ from service.models import CervicalCancerService
 from service_resource_requirement.models import ServiceResourceRequirement
 from service_cost.models import ServiceCost
 from chat.prompts import generate_context, qa_template
+from chat.conversation_cache import conversation_cache
+from messages import models as messages_models
 from groq import Groq
 
 from dotenv import load_dotenv, find_dotenv
@@ -192,18 +194,30 @@ async def get_loggedin_user(current_user: models.User = Depends(auth.get_current
 @router.get("/conversation")
 async def read_conversation(
     query: str,
+    include_history: bool = False,
+    include_context: bool = False,
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
     db_user = auth.get_user(db, email=current_user.email)
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get previous conversation context
+    conversation_context = conversation_cache.get_recent_context(current_user.id, max_messages=6)
+    
     context = generate_context(db_user)
-    prompt = qa_template.format(
+    
+    # Enhanced prompt with conversation history
+    enhanced_prompt = qa_template.format(
         email=db_user.email,
         context=context,
         question=query
     )
+    
+    # Add conversation history if available
+    if conversation_context:
+        enhanced_prompt += f"\n\nPrevious conversation context:\n{conversation_context}\n\nPlease consider this context when responding."
 
     def classify_intent(query: str) -> str:
         q = query.lower()
@@ -220,46 +234,53 @@ async def read_conversation(
         else:
             return "generic"
         
-    def structure_response(query: str, raw_response: str, user: str) -> dict:
+    def structure_response(query: str, raw_response: str) -> dict:
         intent = classify_intent(query)
-
+        
+        clean_response = raw_response.strip()
+        
         return {
-            "user": user,
             "intent": intent,
-            "response": raw_response.strip(),
-            "formatted": format_for_display(intent, raw_response.strip(), user)
+            "response": clean_response,
+            "formatted": format_for_display(intent, clean_response),
+            "conversation_count": conversation_cache.get_conversation_count(current_user.id) + 2,
+            "conversation_history": get_conversation_history_data(current_user.id) if include_history else None,
+            "conversation_context": conversation_cache.get_recent_context(current_user.id, 10) if include_context else None
         }
 
-    def format_for_display(intent: str, response: str, user: str):
-        if intent in ["definition", "symptoms", "treatment", "prevention"]:
-            return {
-                "title": f"{intent.capitalize()} Info",
-                "message": response
-            }
-        elif intent == "support":
-            return {
-                "title": "Support",
-                "message": f"{user}, here's some encouragement and guidance:\n\n{response}"
-            }
-        else:
-            return {
-                "title": "Answer",
-                "message": response
-            }
+    def format_for_display(intent: str, response: str):
+        title_map = {
+            "definition": "Information",
+            "symptoms": "Symptoms",
+            "treatment": "Treatment",
+            "prevention": "Prevention", 
+            "support": "Support",
+            "generic": "SheScreenAI"
+        }
+        
+        return {
+            "title": title_map.get(intent, "SheScreenAI"),
+            "message": response
+        }
         
     try:
         completion = client.chat.completions.create(
             model="compound-beta",
             messages=[
-                {"role": "system", "content": prompt},
+                {"role": "system", "content": enhanced_prompt},
                 {"role": "user", "content": query}
             ]
         )
         raw_response = completion.choices[0].message.content
+        
+        # conversation to memory cache
+        conversation_cache.add_message(current_user.id, query, is_bot_message=False)
+        conversation_cache.add_message(current_user.id, raw_response, is_bot_message=True)
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM service error: {e}")
 
-    return structure_response(query, raw_response, db_user.email)
+    return structure_response(query, raw_response)
 
 
 def get_recommended_facilities(screening_type: str, db: Session, user_region: str):
@@ -408,7 +429,6 @@ async def get_risk_prediction(
             detail="No risk assessment found. Please create a risk assessment first."
         )
     
-    # Rebuild the prediction result for the response
     screening_recommendations = {
         "recommended_screenings": latest_prediction.recommended_screenings.split(",") if latest_prediction.recommended_screenings else [],
         "reason": latest_prediction.reason or "",
@@ -482,4 +502,72 @@ async def get_risk_prediction_history(
         "predictions": predictions,
         "total_count": len(predictions),
         "latest_prediction": latest_prediction
+    }
+
+
+@router.get("/conversation-history")
+async def get_conversation_history(
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """Get user's cached conversation history"""
+    conversations = conversation_cache.get_conversation(current_user.id)
+    
+    formatted_conversations = []
+    for msg in conversations:
+        formatted_conversations.append({
+            "content": msg.content,
+            "is_bot_message": msg.is_bot_message,
+            "timestamp": msg.timestamp.isoformat(),
+            "role": "bot" if msg.is_bot_message else "user"
+        })
+    
+    return {
+        "user_id": current_user.id,
+        "conversation_count": len(conversations),
+        "messages": formatted_conversations
+    }
+
+
+@router.get("/conversation-context")
+async def get_conversation_context(
+    current_user: models.User = Depends(auth.get_current_user),
+    max_messages: int = 10
+):
+    context = conversation_cache.get_recent_context(current_user.id, max_messages)
+    
+    return {
+        "user_id": current_user.id,
+        "context": context,
+        "message_count": conversation_cache.get_conversation_count(current_user.id)
+    }
+
+
+@router.delete("/clear-conversation")
+async def clear_conversation(
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    message_count = conversation_cache.get_conversation_count(current_user.id)
+    conversation_cache.clear_user_conversation(current_user.id)
+    
+    return {
+        "message": f"Conversation history cleared successfully ({message_count} messages removed)",
+        "user_id": current_user.id,
+        "cleared_messages": message_count
+    }
+
+def get_conversation_history_data(user_id: int):
+    conversations = conversation_cache.get_conversation(user_id)
+    
+    formatted_conversations = []
+    for msg in conversations:
+        formatted_conversations.append({
+            "content": msg.content,
+            "is_bot_message": msg.is_bot_message,
+            "timestamp": msg.timestamp.isoformat(),
+            "role": "bot" if msg.is_bot_message else "user"
+        })
+    
+    return {
+        "message_count": len(conversations),
+        "messages": formatted_conversations
     }
