@@ -208,7 +208,6 @@ async def read_conversation(
     
     context = generate_context(db_user)
     
-    # Enhanced prompt with conversation history
     enhanced_prompt = qa_template.format(
         email=db_user.email,
         context=context,
