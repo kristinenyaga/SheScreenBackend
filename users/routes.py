@@ -345,7 +345,6 @@ async def create_risk_assessment(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    """Create a new risk assessment and get prediction"""
     db_user = db.query(models.User).filter(
         models.User.id == current_user.id).first()
     if not db_user:
@@ -358,6 +357,8 @@ async def create_risk_assessment(
         raise HTTPException(status_code=400, detail="Smoking status must be 'Yes' or 'No'")
     if risk_data.stds_history not in ["Yes", "No"]:
         raise HTTPException(status_code=400, detail="STDs history must be 'Yes' or 'No'")
+    if risk_data.hpv_test_result not in ["Positive", "Negative", "Unknown"]:
+        raise HTTPException(status_code=400, detail="HPV test result must be 'Positive', 'Negative', or 'Unknown'")
     if risk_data.number_of_sexual_partners < 0:
         raise HTTPException(status_code=400, detail="Number of sexual partners cannot be negative")
     if risk_data.first_sexual_intercourse_age < 0:
@@ -368,14 +369,15 @@ async def create_risk_assessment(
     age = today.year - db_user.date_of_birth.year - (
         (today.month, today.day) < (db_user.date_of_birth.month, db_user.date_of_birth.day)
     )
-    
-    # Create prediction data
+      # Create prediction data
     prediction_data = RiskPredictionData(
         age=float(age),
         number_of_sexual_partners=risk_data.number_of_sexual_partners,
         first_sexual_intercourse=risk_data.first_sexual_intercourse_age,
         smoking_status=risk_data.smoking_status,
-        stds_history=risk_data.stds_history
+        stds_history=risk_data.stds_history,
+        hpv_test_result=risk_data.hpv_test_result,
+        hpv_vaccinated=risk_data.hpv_vaccinated
     )
     
     # Get risk prediction
@@ -389,6 +391,8 @@ async def create_risk_assessment(
         first_sexual_intercourse_age=risk_data.first_sexual_intercourse_age,
         smoking_status=risk_data.smoking_status,
         stds_history=risk_data.stds_history,
+        hpv_test_result=risk_data.hpv_test_result,
+        hpv_vaccinated=risk_data.hpv_vaccinated,
         age_at_assessment=age,
         cluster=prediction_result.get("cluster"),
         interpretation=prediction_result.get("interpretation"),
@@ -447,7 +451,9 @@ async def get_risk_prediction(
         "number_of_sexual_partners": latest_prediction.number_of_sexual_partners,
         "first_sexual_intercourse": latest_prediction.first_sexual_intercourse_age,
         "smoking_status": latest_prediction.smoking_status,
-        "stds_history": latest_prediction.stds_history
+        "stds_history": latest_prediction.stds_history,
+        "hpv_test_result": latest_prediction.hpv_test_result,
+        "hpv_vaccinated": latest_prediction.hpv_vaccinated
     }
     
     # Get facility recommendations

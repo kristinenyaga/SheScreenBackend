@@ -63,4 +63,5 @@ urllib3
 uvicorn                 
 yarl  
 joblib
-scikit-learn               
+scikit-learn==1.6.1
+pandas            

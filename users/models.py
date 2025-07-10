@@ -42,6 +42,8 @@ class RiskPrediction(Base):
     first_sexual_intercourse_age = Column(Integer, nullable=False)
     smoking_status = Column(String(10), nullable=False)
     stds_history = Column(String(10), nullable=False)
+    hpv_test_result = Column(String(20), nullable=False, default="Negative") 
+    hpv_vaccinated = Column(Boolean, nullable=False, default=False)
     age_at_assessment = Column(Integer, nullable=False)
     
     # Prediction results
