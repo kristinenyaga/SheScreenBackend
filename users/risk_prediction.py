@@ -56,12 +56,8 @@ def get_detailed_recommendation(risk_probability, hpv_positive, age, hpv_vaccina
             
         return {
             "immediate_action": "HPV DNA testing and Pap smear",
-            "follow_up": "HPV-positive patients require specialized care",
-            "screening_frequency": "As recommended by healthcare provider",
             "recommended_screenings": base_recommendations,
             "reason": "HPV positive status requires immediate specialized care",
-            "urgency": "High",
-            "additional_services": ["HPV Treatment", "Specialized Follow-up"]
         }
     
     elif risk_probability < 0.3:
@@ -70,8 +66,6 @@ def get_detailed_recommendation(risk_probability, hpv_positive, age, hpv_vaccina
             additional_services.append("Sexual Education")
             return {
                 "immediate_action": "Continue regular preventive care and get HPV vaccine",
-                "follow_up": "Begin cervical cancer screening at age 25",
-                "screening_frequency": "Every 3 years with Pap smear starting at age 25",
                 "recommended_screenings": base_recommendations,
                 "reason": "Young age with low risk - preventive vaccination is most effective",
                 "urgency": "Low",
@@ -84,8 +78,6 @@ def get_detailed_recommendation(risk_probability, hpv_positive, age, hpv_vaccina
                 
             return {
                 "immediate_action": "Schedule routine Pap smear" + (" and consider HPV vaccine" if "HPV Vaccine" in base_recommendations else ""),
-                "follow_up": "Maintain regular screening schedule",
-                "screening_frequency": "Every 3 years with Pap smear or every 5 years with HPV co-testing",
                 "recommended_screenings": base_recommendations,
                 "reason": "Low risk - routine screening appropriate" + (" with HPV vaccine for additional protection" if "HPV Vaccine" in base_recommendations else ""),
                 "urgency": "Low",
@@ -98,8 +90,6 @@ def get_detailed_recommendation(risk_probability, hpv_positive, age, hpv_vaccina
         
         return {
             "immediate_action": "Schedule Pap smear and HPV testing",
-            "follow_up": "Discuss risk factors with healthcare provider",
-            "screening_frequency": "Consider annual screening or as recommended",
             "recommended_screenings": base_recommendations,
             "reason": "Moderate risk factors present - more frequent screening recommended",
             "urgency": "Medium",
@@ -112,8 +102,6 @@ def get_detailed_recommendation(risk_probability, hpv_positive, age, hpv_vaccina
         
         return {
             "immediate_action": "Schedule immediate screening - Pap smear and HPV testing",
-            "follow_up": "Discuss comprehensive risk management with healthcare provider",
-            "screening_frequency": "Annual screening recommended",
             "recommended_screenings": base_recommendations,
             "reason": "High risk factors present - immediate comprehensive screening required",
             "urgency": "High",
