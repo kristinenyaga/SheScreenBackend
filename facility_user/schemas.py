@@ -16,6 +16,8 @@ class LoginRequest(BaseModel):
     hashed_password: str
 
 
+class TokenData(BaseModel):
+    email: Optional[str] = None
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str

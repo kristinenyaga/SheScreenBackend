@@ -21,10 +21,14 @@ class ServiceCostUpdate(BaseModel):
     insurance_copay_amount: Optional[float] = None
 
 
+class CervicalCancerServiceBase(BaseModel):
+    name: str
+    description: str | None = None
+
 class ServiceCostResponse(ServiceCostBase):
     id: int
     facility_id: int
-    service_id: int
+    service: CervicalCancerServiceBase
 
 
     class Config:
