@@ -38,7 +38,9 @@ class RiskAssessmentCreate(BaseModel):
     number_of_sexual_partners: int
     first_sexual_intercourse_age: int
     smoking_status: str
-    stds_history: str    
+    stds_history: str
+    hpv_test_result: str = "Negative"  # Default to Negative if not provided
+    hpv_vaccinated: bool = False  # Default to False if not provided
 
 class UserIn(BaseModel):
     email:EmailStr
@@ -127,6 +129,7 @@ class RecommendedFacilitiesResponse(BaseModel):
     nearby_facilities: List[FacilityResponse]
     other_facilities: List[FacilityResponse]
     total_count: int
+
 class RiskPredictionResponse(BaseModel):
     user_id: int
     user_location: UserLocation
@@ -143,6 +146,8 @@ class RiskPredictionInDB(BaseModel):
     first_sexual_intercourse_age: int
     smoking_status: str
     stds_history: str
+    hpv_test_result: str
+    hpv_vaccinated: bool
     age_at_assessment: int
     # Prediction results
     cluster: int
