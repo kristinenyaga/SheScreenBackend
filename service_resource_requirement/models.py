@@ -9,8 +9,8 @@ class ServiceResourceRequirement(Base):
 
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("cervical_cancer_services.id"))
-    resource_type_id = Column(Integer, ForeignKey("resource_types.id"))
+    resource_id = Column(Integer, ForeignKey("resources.id"))
     required_quantity = Column(Integer)
 
     service = relationship("CervicalCancerService",back_populates="resource_requirements")
-    resource_type = relationship("ResourceType", back_populates="service_requirements")
+    resource = relationship("Resource", back_populates="service_requirements")

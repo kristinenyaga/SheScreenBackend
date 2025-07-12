@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from users.db import get_db
 from service_cost import models,schemas
-from facility_user import auth
-from facility_user import models as facilityModels
 router = APIRouter(prefix="/service-costs")
 
 
@@ -16,17 +14,17 @@ def create_service_cost(cost: schemas.ServiceCostCreate, db: Session = Depends(g
     return db_cost
 
 
-@router.get("/", response_model=list[schemas.ServiceCostResponse])
-def get_service_costs_by_facility(
-    current_user: facilityModels.FacilityUser = Depends(auth.get_current_user),
-    db: Session = Depends(get_db)
-):
-    return (
-        db.query(models.ServiceCost)
-        .options(joinedload(models.ServiceCost.service))
-        .filter(models.ServiceCost.facility_id == current_user.facility_id)
-        .all()
-    )
+# @router.get("/", response_model=list[schemas.ServiceCostResponse])
+# def get_service_costs_by_facility(
+#     current_user: facilityModels.FacilityUser = Depends(auth.get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     return (
+#         db.query(models.ServiceCost)
+#         .options(joinedload(models.ServiceCost.service))
+#         .filter(models.ServiceCost.facility_id == current_user.facility_id)
+#         .all()
+#     )
 
 
 @router.get("/{cost_id}", response_model=schemas.ServiceCostResponse)

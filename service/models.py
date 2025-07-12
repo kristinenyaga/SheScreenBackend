@@ -17,5 +17,5 @@ class CervicalCancerService(Base):
     description = Column(Text, nullable=True)
     category = Column(Enum(ServiceCategory), nullable=False)
 
-    service_costs = relationship("ServiceCost", back_populates="service")
+    service_cost = relationship("ServiceCost", back_populates="service", uselist=False)
     resource_requirements = relationship("ServiceResourceRequirement", back_populates="service")

@@ -8,16 +8,14 @@ class CarePlan(Base):
     __tablename__ = "care_plans"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_by = Column(Integer, ForeignKey("facility_users.id"), nullable=False)
-    facility_id = Column(Integer, ForeignKey("facilities.id"))
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     hpv_result = Column(String(100))
     pap_smear_result = Column(String(100))
     recommended_action = Column(String(255))
     screening_type = Column(String(100))
-    created_at = Column(DateTime(timezone=True),
-                        default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True),default=lambda: datetime.now(timezone.utc))
 
-    user = relationship("User",back_populates="care_plans")
-    creator = relationship("FacilityUser",back_populates="created_care_plans")
+    patient = relationship("Patient", back_populates="care_plans")
+    creator = relationship("User", back_populates="created_care_plans")
