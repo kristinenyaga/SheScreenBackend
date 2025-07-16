@@ -9,7 +9,6 @@ class ServiceCostBase(BaseModel):
 
 
 class ServiceCostCreate(ServiceCostBase):
-    facility_id: int 
     service_id: int
 
 
@@ -27,7 +26,6 @@ class CervicalCancerServiceBase(BaseModel):
 
 class ServiceCostResponse(ServiceCostBase):
     id: int
-    facility_id: int
     service: CervicalCancerServiceBase
 
 

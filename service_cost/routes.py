@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from users.db import get_db
 from service_cost import models,schemas
+from typing import List
 router = APIRouter(prefix="/service-costs")
 
 
@@ -13,14 +14,10 @@ def create_service_cost(cost: schemas.ServiceCostCreate, db: Session = Depends(g
     db.refresh(db_cost)
     return db_cost
 
-@router.get("/by-service/{service_id}", response_model=schemas.ServiceCostResponse)
-def get_cost_by_service_id(service_id: int, db: Session = Depends(get_db)):
-    cost = db.query(models.ServiceCost).filter(
-        models.ServiceCost.service_id == service_id
-    ).first()
-    if not cost:
-        raise HTTPException(status_code=404, detail="Service cost not found for this service")
-    return cost
+
+@router.get("/", response_model=List[schemas.ServiceCostResponse])
+def get_all_service_costs(db: Session = Depends(get_db)):
+    return db.query(models.ServiceCost).all()
 
 # @router.get("/", response_model=list[schemas.ServiceCostResponse])
 # def get_service_costs_by_facility(
