@@ -5,11 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from users import models
 from users.db import engine
 from users.routes import router as users_routes
+from lab_tests.routes import router as lab_tests_routes
 from messages.routes import router as messages_routes
 from resources.routes import router as resource_routes
 from care_plan.routes import router as care_plan_routes
 from patients.routes import router as patient_routes
 from patient_profiles.routes import router as patient_profiles_routes
+from patient_billable_items.routes import router as patient_billable_items_routes
 from recommended_action.routes import router as recommended_action_routes
 from service.routes import router as service_routes
 from service_resource_requirement.routes import router as service_resource_requirement_routes
@@ -29,8 +31,10 @@ models.Base.metadata.create_all(bind=engine)
 
 app.include_router(care_plan_routes)
 app.include_router(resource_routes)
+app.include_router(lab_tests_routes)
 app.include_router(messages_routes)
 app.include_router(patient_routes)
+app.include_router(patient_billable_items_routes)
 app.include_router(patient_profiles_routes)
 app.include_router(recommended_action_routes)
 app.include_router(service_cost_routes)
