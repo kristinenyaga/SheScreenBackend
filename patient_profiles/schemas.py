@@ -28,12 +28,18 @@ class PatientProfileBase(BaseModel):
     children_count: Optional[int]
     first_pregnancy_age: Optional[str]
     family_history: Optional[str]
-    patient: PatientOut
 
     class Config:
         orm_mode = True
 
 
+class PatientProfileResponse(PatientProfileBase):
+    id: int
+    patient_id: int
+    patient: PatientOut  
+
+    class Config:
+        orm_mode = True
 class PatientProfileCreate(PatientProfileBase):
     patient_id: int
 
@@ -42,6 +48,3 @@ class PatientProfileUpdate(PatientProfileBase):
     pass
 
 
-class PatientProfileResponse(PatientProfileBase):
-    id: int
-    patient_id: int

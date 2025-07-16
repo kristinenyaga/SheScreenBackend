@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey,Boolean
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey,Boolean,Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from datetime import datetime, timezone
@@ -16,6 +16,8 @@ class Patient(Base):
     hashed_password = Column(String(255), nullable=False)
     email = Column(String(250),unique=True, nullable=True)
     phone_number = Column(String(100), nullable=True)
+    patient_code = Column(String(20), unique=True, index=True, nullable=False)
+
 
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True),default=lambda: datetime.now(timezone.utc))
@@ -27,6 +29,9 @@ class Patient(Base):
 
     received_messages = relationship("Message", back_populates="receiver_patient")
     recommendations = relationship("Recommendation", back_populates="patient")
+    lab_tests = relationship("LabTest", back_populates="patient")
+    billable_items = relationship("PatientBillableItem", back_populates="patient")
+
 
 class RiskPrediction(Base):
     __tablename__ = "risk_predictions"
@@ -44,9 +49,9 @@ class RiskPrediction(Base):
     age_at_assessment = Column(Integer, nullable=False)
 
     # Prediction results
-    cluster = Column(Integer, nullable=False)
     interpretation = Column(String(255), nullable=False)
     risk_level = Column(String(50), nullable=False)  # High, Medium, Low
+    risk_probability = Column(Float,nullable=False)
 
     # Screening recommendations
     recommended_screenings = Column(String(500), nullable=True)

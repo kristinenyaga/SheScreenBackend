@@ -16,6 +16,11 @@ class RiskPredictionData:
         self.hpv_test_result = hpv_test_result
         self.hpv_vaccinated = hpv_vaccinated
 
+
+kmeans_selected = None
+selector = None
+full_risk_pipeline = None
+
 # Load models and pipelines
 kmeans_selected = joblib.load("models/cervical_cancer_kmeans_selected_model.pkl")
 selector = joblib.load("pipelines/cervical_cancer_feature_selector.pkl")
@@ -26,9 +31,7 @@ with open('selected_feature_names.pkl', 'rb') as f:
     selected_feature_names = pickle.load(f)
 
 
-kmeans_selected = None
-selector = None
-full_risk_pipeline = None
+
 selected_feature_names = []
 
 # Probability thresholds
@@ -157,105 +160,57 @@ def predict_risk(data):
     else:
         age_group = '50+'
 
-    try:
-        if full_risk_pipeline is not None and selector is not None:
-            input_data = pd.DataFrame({
-                'Age': [data.age],
-                'Sexual Partners': [data.number_of_sexual_partners],
-                'First Sexual Activity Age': [data.first_sexual_intercourse],
-                'Smoking Status': [data.smoking_status],
-                'STDs History': [data.stds_history],
-                'HPV Test Result': [data.hpv_test_result],
-                'Years_Sexually_Active': [years_sexually_active],
-                'Smoking_Status_Num': [smoking_status_num],
-                'STDs_History_Num': [stds_history_num],
-                'HPV_Test_Result_Num': [hpv_results_num],
-                'Risk_Score': [risk_score],
-                'Smokes_and_Has_STDs': [smokes_and_has_stds],
-                'Sexual_Partner_and_Years_Active': [sexual_partner_and_years_active],
-                'Log_Sexual_Partners': [log_sexual_partners],
-                'Years_Sexually_Active_Squared': [years_sexually_active_squared],
-                'HPV_and_STDs': [hpv_and_stds],
-                'HPV_and_Smoking': [hpv_and_smoking],
-                'High_Risk_Score': [high_risk_score],
-                'Early_Sexual_Activity': [early_sexual_activity],
-                'Age_Group': [age_group]
-            })
-            
-            X_transformed = full_risk_pipeline.transform(input_data)
-            X_selected = selector.transform(X_transformed)
-            cluster = int(kmeans_selected.predict(X_selected)[0])
-            
-            # Calculate risk probability
-            cluster_centers = kmeans_selected.cluster_centers_
-            distances = np.linalg.norm(X_selected - cluster_centers, axis=1)
-            risk_probability = float(distances[cluster] / np.max(distances))
-            
-            risk_category, risk_description = get_risk_category(risk_probability, hpv_results_num)
-            detailed_recommendation = get_detailed_recommendation(risk_probability, hpv_results_num, data.age, data.hpv_vaccinated)
-            
-            return {
-                "interpretation": f"Risk Category: {risk_category} - {risk_description}",
-                "risk_probability": risk_probability,
-                "risk_category": risk_category,
-                "risk_description": risk_description,
-                "screening_recommendations": detailed_recommendation,
-                "risk_factors": {
-                    "hpv_positive": hpv_results_num == 1,
-                    "smoking": smoking_status_num == 1,
-                    "stds_history": stds_history_num == 1,
-                    "early_sexual_activity": early_sexual_activity == 1,
-                    "multiple_partners": data.number_of_sexual_partners > 2,
-                    "age_group": age_group
-                },
-                "selected_features": selected_feature_names
-            }
-            
-        else:
-            basic_risk = (risk_score / 4.0)  
-            
-            if hpv_results_num == 1:
-                basic_risk = 1.0  
-            elif (smoking_status_num == 1 and stds_history_num == 1 and 
-                  data.number_of_sexual_partners > 3 and data.first_sexual_intercourse < 18):
-                basic_risk = 0.8  
-            elif (smoking_status_num == 1 or stds_history_num == 1 or 
-                  data.number_of_sexual_partners > 2 or data.first_sexual_intercourse < 18):
-                basic_risk = max(basic_risk, 0.5)  
-            else:
-                basic_risk = max(basic_risk, 0.2)  
-            
-            risk_category, risk_description = get_risk_category(basic_risk, hpv_results_num)
-            detailed_recommendation = get_detailed_recommendation(basic_risk, hpv_results_num, data.age, data.hpv_vaccinated)
-            
-            return {
-                "cluster": 0,
-                "interpretation": f"Risk Category: {risk_category} - {risk_description}",
-                "risk_probability": basic_risk,
-                "risk_category": risk_category,
-                "risk_description": risk_description,
-                "screening_recommendations": detailed_recommendation,
-                "risk_factors": {
-                    "hpv_positive": hpv_results_num == 1,
-                    "smoking": smoking_status_num == 1,
-                    "stds_history": stds_history_num == 1,
-                    "early_sexual_activity": early_sexual_activity == 1,
-                    "multiple_partners": data.number_of_sexual_partners > 2,
-                    "age_group": age_group
-                },
-                "assessment_method": "rule-based" if kmeans_selected is None else "basic-model"
-            }
-        
-    except Exception as e:
-        print(f"Prediction error: {e}")
-        return {
-            "error": f"Prediction failed: {str(e)}",
-            "risk_probability": 0.0,
-            "risk_category": "Error",
-            "risk_description": "Unable to assess risk",
-            "screening_recommendations": {
-                "recommended_screenings": ["Consult Healthcare Provider"],
-                "reason": "Error in risk assessment - professional consultation needed",
-                "urgency": "Medium"
-            }
+    input_data = pd.DataFrame({
+        'Age': [data.age],
+        'Sexual Partners': [data.number_of_sexual_partners],
+        'First Sexual Activity Age': [data.first_sexual_intercourse],
+        'Smoking Status': [data.smoking_status],
+        'STDs History': [data.stds_history],
+        'HPV Test Result': [data.hpv_test_result],
+        'Years_Sexually_Active': [years_sexually_active],
+        'Smoking_Status_Num': [smoking_status_num],
+        'STDs_History_Num': [stds_history_num],
+        'HPV_Test_Result_Num': [hpv_results_num],
+        'Risk_Score': [risk_score],
+        'Smokes_and_Has_STDs': [smokes_and_has_stds],
+        'Sexual_Partner_and_Years_Active': [sexual_partner_and_years_active],
+        'Log_Sexual_Partners': [log_sexual_partners],
+        'Years_Sexually_Active_Squared': [years_sexually_active_squared],
+        'HPV_and_STDs': [hpv_and_stds],
+        'HPV_and_Smoking': [hpv_and_smoking],
+        'High_Risk_Score': [high_risk_score],
+        'Early_Sexual_Activity': [early_sexual_activity],
+        'Age_Group': [age_group]
+    })
+
+    X_transformed = full_risk_pipeline.transform(input_data)
+    X_selected = selector.transform(X_transformed)
+    cluster = int(kmeans_selected.predict(X_selected)[0])
+
+        # Calculate risk probability
+    cluster_centers = kmeans_selected.cluster_centers_
+    distances = np.linalg.norm(X_selected - cluster_centers, axis=1)
+    risk_probability = float(distances[cluster] / np.max(distances))
+
+    risk_category, risk_description = get_risk_category(
+        risk_probability, hpv_results_num)
+    detailed_recommendation = get_detailed_recommendation(
+        risk_probability, hpv_results_num, data.age, data.hpv_vaccinated)
+
+    return {
+        "interpretation": f"Risk Category: {risk_category} - {risk_description}",
+        "risk_probability": risk_probability,
+        "risk_category": risk_category,
+        "risk_description": risk_description,
+        "screening_recommendations": detailed_recommendation,
+        "risk_factors": {
+            "hpv_positive": hpv_results_num == 1,
+            "smoking": smoking_status_num == 1,
+            "stds_history": stds_history_num == 1,
+            "early_sexual_activity": early_sexual_activity == 1,
+            "multiple_partners": data.number_of_sexual_partners > 2,
+            "age_group": age_group
+        },
+        "selected_features": selected_feature_names
         }
+

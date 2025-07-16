@@ -28,15 +28,24 @@ class PatientUpdate(BaseModel):
     phone_number: Optional[str] = None
 
 
-
 class PatientOut(PatientBase):
     id: int
     created_by_id: int
     created_at: datetime
+    patient_code: str
+
+
+    model_config = {
+        "from_attributes": True
+    }
+
+
+
+class PatientWithRisk(PatientOut):
+    risk_level: Optional[str] = None
 
     class Config:
-        orm_mode = True
-
+        from_attributes = True
 
 class RiskAssessmentUpdate(BaseModel):
     number_of_sexual_partners: int
@@ -116,23 +125,26 @@ class FacilityResponse(BaseModel):
 
 
 class PredictionResult(BaseModel):
-    cluster: int
     interpretation: str
     screening_recommendations: ScreeningRecommendation
+    risk_probability: float
     
 class RiskPredictionSummary(BaseModel):
     risk_level: str
     next_steps: list[str]
     reason: str
     additional_services: list[str]
+    availability:list[dict]
     # location_note: str
 
 
 class RiskPredictionResponse(BaseModel):
+    id: int
     patient_id: int
     risk_assessment: dict
     prediction: PredictionResult
     summary: RiskPredictionSummary
+
 
 
 class RiskPredictionInDB(BaseModel):
@@ -147,7 +159,6 @@ class RiskPredictionInDB(BaseModel):
     hpv_vaccinated: bool
     age_at_assessment: int
     # Prediction results
-    cluster: int
     interpretation: str
     risk_level: str
     recommended_screenings: Optional[str]
@@ -156,6 +167,8 @@ class RiskPredictionInDB(BaseModel):
     frequency: Optional[str]
     additional_services: Optional[str]
     created_at: date
+    risk_probability: float
+
 
 
 

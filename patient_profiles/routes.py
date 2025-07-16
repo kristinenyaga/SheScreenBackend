@@ -1,3 +1,4 @@
+from sqlalchemy.orm import joinedload
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
@@ -9,12 +10,13 @@ from patient_profiles.schemas import (
     PatientProfileCreate,
     PatientProfileUpdate,
     PatientProfileResponse,
+    PatientProfileBase
 )
 
 router = APIRouter(prefix="/patient-profiles", tags=["Patient Profiles"])
 
 
-@router.post("/", response_model=PatientProfileResponse)
+@router.post("/", response_model=PatientProfileBase)
 def create_profile(profile_data: PatientProfileCreate, db: Session = Depends(get_db)):
     patient = db.query(PatientModels.Patient).filter(
         PatientModels.Patient.id == profile_data.patient_id).first()
@@ -35,11 +37,16 @@ def get_all_profiles(db: Session = Depends(get_db)):
 
 @router.get("/{patient_id}", response_model=PatientProfileResponse)
 def get_profile_by_patient(patient_id: int, db: Session = Depends(get_db)):
-    profile = db.query(PatientProfile).filter(
-        PatientProfile.patient_id == patient_id).first()
+    profile = (
+        db.query(PatientProfile)
+        .options(joinedload(PatientProfile.patient))
+        .filter(PatientProfile.patient_id == patient_id)
+        .first()
+    )
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
+
 
 
 @router.put("/{patient_id}", response_model=PatientProfileResponse)

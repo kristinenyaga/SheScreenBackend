@@ -19,6 +19,7 @@ from patients.risk_prediction import predict_risk, RiskPredictionData
 from chat.prompts import generate_context, qa_template
 from chat.conversation_cache import conversation_cache
 from messages import models as messages_models
+from service import models as service_models
 from groq import Groq
 
 from dotenv import load_dotenv, find_dotenv
@@ -61,10 +62,31 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
 
     return db_patient
 
-@router.get("/", response_model=List[PatientOut])
-def get_patients(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(models.Patient).offset(skip).limit(limit).all()
 
+@router.get("/", response_model=List[schemas.PatientWithRisk])
+def get_patients_with_risk(db: Session = Depends(get_db)):
+    patients = db.query(models.Patient).all()
+    results = []
+
+    for patient in patients:
+        # Get latest risk prediction (if any)
+        latest_risk = (
+            db.query(models.RiskPrediction)
+            .filter(models.RiskPrediction.patient_id == patient.id)
+            .order_by(models.RiskPrediction.created_at.desc())
+            .first()
+        )
+
+        # Get risk level or None
+        risk_level = latest_risk.risk_level if latest_risk else None
+
+        # Convert Patient ORM → dict and append risk_level
+        patient_data = schemas.PatientOut.from_orm(patient).dict()
+        patient_data["risk_level"] = risk_level
+
+        results.append(patient_data)
+
+    return results
 
 @router.get("/{id}", response_model=PatientOut)
 def get_patient(id: int, db: Session = Depends(get_db)):
@@ -298,7 +320,7 @@ async def create_risk_assessment(
         hpv_test_result=risk_data.hpv_test_result,
         hpv_vaccinated=risk_data.hpv_vaccinated,
         age_at_assessment=age,
-        cluster=prediction_result.get("cluster"),
+        risk_probability=prediction_result.get("risk_probability"),
         interpretation=prediction_result.get("interpretation"),
         risk_level=screening_recommendations.get("urgency", "Unknown"),
         recommended_screenings=",".join(
@@ -317,6 +339,30 @@ async def create_risk_assessment(
 
     return db_prediction
 
+
+def is_service_available(service_name: str, db: Session) -> bool:
+    service = db.query(service_models.CervicalCancerService).filter_by(
+        name=service_name).first()
+
+    if not service:
+        return False
+
+    if not service.resource_requirements:
+        return False
+
+    for requirement in service.resource_requirements:
+        resource = requirement.resource
+
+        if not resource:
+            return False 
+
+        print(resource.name, resource.quantity_available,
+              resource.low_stock_threshold)
+
+        if resource.quantity_available < requirement.required_quantity:
+            return False
+
+    return True
 
 @router.get("/risk-prediction/{patient_id}", response_model=schemas.RiskPredictionResponse)
 async def get_risk_prediction(
@@ -346,7 +392,7 @@ async def get_risk_prediction(
     }
 
     prediction_result = {
-        "cluster": latest_prediction.cluster,
+        "risk_probability": latest_prediction.risk_probability,
         "interpretation": latest_prediction.interpretation,
         "screening_recommendations": screening_recommendations
     }
@@ -364,8 +410,17 @@ async def get_risk_prediction(
     # Get facility recommendations
     recommended_screenings = screening_recommendations.get(
         "recommended_screenings", [])
+    print("recommended_screenings", recommended_screenings)
+    availability_info = []
+    for service_name in recommended_screenings:
+        available = is_service_available(service_name, db)
+        availability_info.append({
+            "service": service_name,
+            "available": available
+            })
 
     return {
+        "id":latest_prediction.id,
         "patient_id": patient.id,
         "risk_assessment": risk_data,
         "prediction": prediction_result,
@@ -374,6 +429,7 @@ async def get_risk_prediction(
             "next_steps": screening_recommendations.get("recommended_screenings", []),
             "reason": screening_recommendations.get("reason", ""),
             "additional_services": screening_recommendations.get("additional_services", []),
+            "availability": availability_info
             # "location_note": f"Found {len(same_region_facilities)} facilities in your region ({db_user.region})" if db_user.region and same_region_facilities else "Consider updating your region for better facility recommendations"
         }
     }
