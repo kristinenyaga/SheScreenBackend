@@ -9,6 +9,7 @@ class Resource(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
+    code = Column(String(50), unique=True)
     unit_of_measure = Column(String(50), nullable=False)
     quantity_available = Column(Integer, nullable=False, default=0)
     low_stock_threshold = Column(Integer, nullable=False, default=0)
