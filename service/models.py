@@ -14,6 +14,7 @@ class CervicalCancerService(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), unique=True, nullable=False)
+    slug = Column(String(100), unique=True)
     description = Column(Text, nullable=True)
     category = Column(Enum(ServiceCategory), nullable=False)
 
