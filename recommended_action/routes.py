@@ -19,3 +19,7 @@ def create_recommendation(data: RecommendationCreate, db: Session = Depends(get_
 @router.get("/by-patient/{patient_id}", response_model=list[RecommendationOut])
 def get_patient_recommendations(patient_id: int, db: Session = Depends(get_db)):
     return db.query(Recommendation).filter(Recommendation.patient_id == patient_id).all()
+
+@router.get("/",response_model=list[RecommendationOut])
+def get_recommendations(db:Session=Depends(get_db)):
+    return db.query(Recommendation).all()
