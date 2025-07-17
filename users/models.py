@@ -31,5 +31,6 @@ class User(Base):
     patients = relationship("Patient", back_populates="created_by")
     created_care_plans = relationship("CarePlan", back_populates="creator")
     sent_messages = relationship("Message", back_populates="sender_user")
+    follow_ups_finalized = relationship("FollowUp",back_populates="finalized_by",foreign_keys="FollowUp.finalized_by_user_id")
 
 

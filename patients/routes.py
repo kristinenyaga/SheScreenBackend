@@ -383,7 +383,7 @@ async def create_risk_assessment(
     return db_prediction
 
 
-@router.post("/followup", response_model=RecommendationResponse)
+@router.post("/followup", response_model=schemas.RecommendationInDB)
 async def get_patient_recommendation(
     recommendation_request: RecommendationRequest,
     db: Session = Depends(get_db)
@@ -431,7 +431,7 @@ async def get_patient_recommendation(
         db.commit()
         db.refresh(db_recommendation)
         
-        return recommendation_result
+        return db_recommendation
         
     except Exception as e:
         raise HTTPException(
@@ -464,6 +464,30 @@ async def get_patient_recommendations(
             detail=f"Error retrieving recommendations: {str(e)}"
         )
 
+
+@router.get("/patientfollowup/{follow_up_id}", response_model=schemas.RecommendationInDB)
+def get_follow_up(follow_up_id: int, db: Session = Depends(get_db)):
+    follow_up = db.query(models.FollowUp).filter(models.FollowUp.id == follow_up_id).first()
+    if not follow_up:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+    return follow_up
+
+@router.patch("/followup/{id}", response_model=schemas.RecommendationInDB)
+def update_follow_up(id: int, update_data: schemas.FollowUpUpdate, db: Session = Depends(get_db)):
+    follow_up = db.query(models.FollowUp).filter(models.FollowUp.id == id).first()
+
+    if not follow_up:
+        raise HTTPException(status_code=404, detail="Follow-up not found")
+
+    if update_data.final_plan is not None:
+        follow_up.final_plan = update_data.final_plan
+
+    if update_data.finalized_by_user_id is not None:
+        follow_up.finalized_by_user_id = update_data.finalized_by_user_id
+
+    db.commit()
+    db.refresh(follow_up)
+    return follow_up
 
 @router.get("/followup/{patient_id}/latest", response_model=schemas.RecommendationInDB)
 async def get_latest_patient_recommendation(

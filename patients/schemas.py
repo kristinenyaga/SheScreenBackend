@@ -77,6 +77,7 @@ class RecommendationRequest(BaseModel):
 
 
 class RecommendationResponse(BaseModel):
+    id:int
     category: str
     options: List[str]
     context: List[str]
@@ -194,6 +195,22 @@ class RiskPredictionHistory(BaseModel):
         from_attributes = True
 
 
+class FollowUpUpdate(BaseModel):
+    final_plan: Optional[str] = None
+    finalized_by_user_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+class FinalizedByUser(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+
+    class Config:
+        from_attributes = True
+
+
 class RecommendationInDB(BaseModel):
     id: int
     patient_id: int
@@ -208,11 +225,14 @@ class RecommendationInDB(BaseModel):
     screening_type_last: Optional[str]
     category: str
     options: str
-    context: Optional[str]  
+    context: Optional[str]
     confidence: float
     method: str
     prediction_label: Optional[int]
-    prediction_probabilities: Optional[str] 
+    prediction_probabilities: Optional[str]
+    final_plan: Optional[str]
+    finalized_by_user_id: Optional[int]
+    finalized_by: Optional[FinalizedByUser]
     created_at: datetime
 
     class Config:

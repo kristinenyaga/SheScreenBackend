@@ -3,6 +3,13 @@ from typing import Optional
 from datetime import datetime
 
 
+class CervicalCancerServiceOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        orm_mode = True
+
 class PatientBillableItemBase(BaseModel):
     patient_id: int
     service_id: int
@@ -26,6 +33,15 @@ class PatientBillableItemUpdate(BaseModel):
 class PatientBillableItemOut(PatientBillableItemBase):
     id: int
     date_created: datetime
+    service: Optional[CervicalCancerServiceOut]
+
+    class Config:
+        orm_mode = True
+
+
+class PatientBillableItemSummary(BaseModel):
+    items: list[PatientBillableItemOut]
+    total_cost: float
 
     class Config:
         orm_mode = True

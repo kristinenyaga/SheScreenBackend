@@ -16,12 +16,17 @@ class LabTestCreate(BaseModel):
     ordered_by_id: int
 
 
-class LabTestUpdate(BaseModel):
-    result: Optional[str]
-    status: Optional[LabTestStatus]
-    entered_by_id: Optional[int]
+class FollowUpAssignment(BaseModel):
+    follow_up_id: int
 
-# schemas.py
+
+class LabTestUpdate(BaseModel):
+    result: Optional[str] = None
+    status: Optional[LabTestStatus] = None
+    comment: Optional[str] = None
+    entered_by_id: Optional[int] = None
+    follow_up_id: Optional[int] = None  
+
 
 class SimplePatient(BaseModel):
     id: int
@@ -59,6 +64,7 @@ class LabTestOut(BaseModel):
     status: LabTestStatus
     ordered_by: SimpleUser
     entered_by_id: Optional[int]
+    follow_up_id: Optional[int]
     date_ordered: datetime
     date_completed: Optional[datetime]
 

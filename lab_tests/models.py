@@ -27,10 +27,13 @@ class LabTest(Base):
 
     date_ordered = Column(DateTime, default=datetime.utcnow)
     date_completed = Column(DateTime, nullable=True)
+    follow_up_id = Column(Integer, ForeignKey("follow_ups.id"), nullable=True)
 
+    
 
     recommendation = relationship("Recommendation", back_populates="lab_tests")
     service = relationship("CervicalCancerService")
     patient = relationship("Patient", back_populates="lab_tests")
     ordered_by = relationship("User", foreign_keys=[ordered_by_id])
     entered_by = relationship("User", foreign_keys=[entered_by_id])
+    follow_up = relationship("FollowUp", back_populates="lab_tests")

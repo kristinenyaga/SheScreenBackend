@@ -100,6 +100,11 @@ class FollowUp(Base):
     prediction_label = Column(Integer, nullable=True)
     prediction_probabilities = Column(Text, nullable=True)  # JSON string of probabilities
     
+    final_plan = Column(Text, nullable=True) 
+    finalized_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     patient = relationship("Patient", back_populates="follow_up_plans")
     risk_prediction = relationship("RiskPrediction", back_populates="follow_up_plans")
+    finalized_by = relationship("User", back_populates="follow_ups_finalized", foreign_keys=[finalized_by_user_id])
+    lab_tests = relationship("LabTest", back_populates="follow_up")

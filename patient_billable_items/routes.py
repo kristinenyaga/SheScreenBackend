@@ -64,3 +64,19 @@ def update_billable_item(
     db.commit()
     db.refresh(item)
     return item
+
+
+@router.get("/by-patient/{patient_id}", response_model=schemas.PatientBillableItemSummary)
+def get_billable_items_with_total(patient_id: int, db: Session = Depends(get_db)):
+    items = (
+        db.query(PatientBillableItem)
+        .filter(PatientBillableItem.patient_id == patient_id)
+        .all()
+    )
+
+    total = sum(item.patient_amount for item in items if item.patient_amount)
+
+    return {
+        "items": items,
+        "total_cost": round(total, 2)
+    }
