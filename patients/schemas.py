@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, EmailStr
 from datetime import date, datetime
 
@@ -60,8 +60,30 @@ class RiskAssessmentCreate(BaseModel):
     first_sexual_intercourse_age: int
     smoking_status: str
     stds_history: str
-    hpv_test_result: str = "Negative"  # Default to Negative if not provided
-    hpv_vaccinated: bool = False  # Default to False if not provided
+    hpv_test_result: str = "Negative"
+    hpv_vaccinated: bool = False 
+
+
+class RecommendationRequest(BaseModel):
+    patient_id: int
+    age: int
+    number_of_sexual_partners: int
+    first_sexual_intercourse_age: int
+    smoking_status: str
+    stds_history: str
+    hpv_current_test_result: str
+    pap_smear_result: str
+    screening_type_last: str
+
+
+class RecommendationResponse(BaseModel):
+    category: str
+    options: List[str]
+    context: List[str]
+    prediction_label: int
+    prediction_probabilities: List[float]
+    confidence: float
+    error: Optional[str] = None
 
 
 class PatientIn(BaseModel):
@@ -80,7 +102,6 @@ class Token(BaseModel):
     token_type: str
 
 
-# Risk Prediction Response Schemas
 class ScreeningRecommendation(BaseModel):
     recommended_screenings: list[str]
     reason: str
@@ -123,7 +144,6 @@ class FacilityResponse(BaseModel):
     service_cost: Optional[ServiceCostResponse]
 
 
-
 class PredictionResult(BaseModel):
     interpretation: str
     screening_recommendations: ScreeningRecommendation
@@ -137,15 +157,12 @@ class RiskPredictionSummary(BaseModel):
     availability:list[dict]
     # location_note: str
 
-
 class RiskPredictionResponse(BaseModel):
     id: int
     patient_id: int
     risk_assessment: dict
     prediction: PredictionResult
     summary: RiskPredictionSummary
-
-
 
 class RiskPredictionInDB(BaseModel):
     id: int
@@ -169,13 +186,35 @@ class RiskPredictionInDB(BaseModel):
     created_at: date
     risk_probability: float
 
-
-
-
 class RiskPredictionHistory(BaseModel):
     predictions: list[RiskPredictionInDB]
     total_count: int
     latest_prediction: Optional[RiskPredictionInDB]
+
+    class Config:
+        from_attributes = True
+
+
+class RecommendationInDB(BaseModel):
+    id: int
+    patient_id: int
+    risk_prediction_id: Optional[int]
+    age: int
+    number_of_sexual_partners: int
+    first_sexual_intercourse_age: int
+    smoking_status: str
+    stds_history: str
+    hpv_current_test_result: str
+    pap_smear_result: str
+    screening_type_last: Optional[str]
+    category: str
+    options: str
+    context: Optional[str]  
+    confidence: float
+    method: str
+    prediction_label: Optional[int]
+    prediction_probabilities: Optional[str] 
+    created_at: datetime
 
     class Config:
         from_attributes = True
