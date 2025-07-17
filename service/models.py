@@ -8,6 +8,7 @@ class ServiceCategory(str, enum.Enum):
     screening = "screening"
     vaccination = "vaccination"
     treatment = "treatment"
+    consultation = "consultation"
 
 class CervicalCancerService(Base):
     __tablename__ = "cervical_cancer_services"

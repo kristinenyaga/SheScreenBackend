@@ -81,7 +81,6 @@ class RecommendationResponse(BaseModel):
     options: List[str]
     context: List[str]
     prediction_label: int
-    prediction_probabilities: List[float]
     confidence: float
     error: Optional[str] = None
 

@@ -31,6 +31,8 @@ class Patient(Base):
     recommendations = relationship("Recommendation", back_populates="patient")
     lab_tests = relationship("LabTest", back_populates="patient")
     billable_items = relationship("PatientBillableItem", back_populates="patient")
+    follow_up_plans = relationship("FollowUp", back_populates="patient")
+
 
 
 class RiskPrediction(Base):
@@ -67,16 +69,19 @@ class RiskPrediction(Base):
     
     recommendation = relationship(
         "Recommendation", back_populates="risk_prediction", uselist=False)
+    
+    follow_up_plans = relationship(
+        "FollowUp", back_populates="risk_prediction")  
 
 
-class Recommendation(Base):
-    __tablename__ = "recommendations"
+class FollowUp(Base):
+    __tablename__ = "follow_ups"
 
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
     risk_prediction_id = Column(Integer, ForeignKey("risk_predictions.id"), nullable=True)
     
-    # Input data for recommendation
+    # Input data
     age = Column(Integer, nullable=False)
     number_of_sexual_partners = Column(Integer, nullable=False)
     first_sexual_intercourse_age = Column(Integer, nullable=False)
@@ -86,7 +91,7 @@ class Recommendation(Base):
     pap_smear_result = Column(String(20), nullable=False)
     screening_type_last = Column(String(50), nullable=True)
     
-    # Recommendation results
+    # results
     category = Column(String(100), nullable=False)
     options = Column(Text, nullable=False)  # JSON string of options
     context = Column(Text, nullable=True)   # JSON string of context
@@ -96,7 +101,5 @@ class Recommendation(Base):
     prediction_probabilities = Column(Text, nullable=True)  # JSON string of probabilities
     
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    
-    # Relationships
-    patient = relationship("Patient", back_populates="recommendations")
-    risk_prediction = relationship("RiskPrediction", back_populates="recommendation", uselist=False)
+    patient = relationship("Patient", back_populates="follow_up_plans")
+    risk_prediction = relationship("RiskPrediction", back_populates="follow_up_plans")

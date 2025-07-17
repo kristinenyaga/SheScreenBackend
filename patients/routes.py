@@ -178,16 +178,16 @@ def get_complete_patient_profile(
         )
         
         latest_recommendation = (
-            db.query(models.Recommendation)
-            .filter(models.Recommendation.patient_id == current_user.id)
-            .order_by(models.Recommendation.created_at.desc())
+            db.query(models.FollowUp)
+            .filter(models.FollowUp.patient_id == current_user.id)
+            .order_by(models.FollowUp.created_at.desc())
             .first()
         )
         
         recent_recommendations = (
-            db.query(models.Recommendation)
-            .filter(models.Recommendation.patient_id == current_user.id)
-            .order_by(models.Recommendation.created_at.desc())
+            db.query(models.FollowUp)
+            .filter(models.FollowUp.patient_id == current_user.id)
+            .order_by(models.FollowUp.created_at.desc())
             .limit(5)
             .all()
         )
@@ -408,7 +408,7 @@ async def get_patient_recommendation(
         
         recommendation_result = get_recommendation(recommendation_data)
         
-        db_recommendation = models.Recommendation(
+        db_recommendation = models.FollowUp(
             patient_id=recommendation_request.patient_id,
             age=recommendation_request.age,
             number_of_sexual_partners=recommendation_request.number_of_sexual_partners,
@@ -452,9 +452,9 @@ async def get_patient_recommendations(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
         
-        recommendations = db.query(models.Recommendation).filter(
-            models.Recommendation.patient_id == patient_id
-        ).order_by(models.Recommendation.created_at.desc()).all()
+        recommendations = db.query(models.FollowUp).filter(
+            models.FollowUp.patient_id == patient_id
+        ).order_by(models.FollowUp.created_at.desc()).all()
         
         return recommendations
         
@@ -477,9 +477,9 @@ async def get_latest_patient_recommendation(
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
         
-        latest_recommendation = db.query(models.Recommendation).filter(
-            models.Recommendation.patient_id == patient_id
-        ).order_by(models.Recommendation.created_at.desc()).first()
+        latest_recommendation = db.query(models.FollowUp).filter(
+            models.FollowUp.patient_id == patient_id
+        ).order_by(models.FollowUp.created_at.desc()).first()
         
         if not latest_recommendation:
             raise HTTPException(

@@ -7,6 +7,7 @@ class ServiceCategory(str, Enum):
     screening = "screening"
     vaccination = "vaccination"
     treatment = "treatment"
+    consultation = "consultation"
 
 
 class CervicalCancerServiceCreate(BaseModel):
