@@ -383,7 +383,7 @@ async def create_risk_assessment(
     return db_prediction
 
 
-@router.post("/recommendation", response_model=RecommendationResponse)
+@router.post("/followup", response_model=RecommendationResponse)
 async def get_patient_recommendation(
     recommendation_request: RecommendationRequest,
     db: Session = Depends(get_db)
@@ -436,11 +436,11 @@ async def get_patient_recommendation(
     except Exception as e:
         raise HTTPException(
             status_code=500, 
-            detail=f"Error generating recommendation: {str(e)}"
+            detail=f"Error generating followup: {str(e)}"
         )
 
 
-@router.get("/recommendation/{patient_id}", response_model=List[schemas.RecommendationInDB])
+@router.get("/followup/{patient_id}", response_model=List[schemas.RecommendationInDB])
 async def get_patient_recommendations(
     patient_id: int,
     db: Session = Depends(get_db)
@@ -465,7 +465,7 @@ async def get_patient_recommendations(
         )
 
 
-@router.get("/recommendation/{patient_id}/latest", response_model=schemas.RecommendationInDB)
+@router.get("/followup/{patient_id}/latest", response_model=schemas.RecommendationInDB)
 async def get_latest_patient_recommendation(
     patient_id: int,
     db: Session = Depends(get_db)
@@ -492,7 +492,7 @@ async def get_latest_patient_recommendation(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error retrieving latest recommendation: {str(e)}"
+            detail=f"Error retrieving latest followup: {str(e)}"
         )
 
 
