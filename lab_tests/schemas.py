@@ -21,7 +21,6 @@ class LabTestUpdate(BaseModel):
     status: Optional[LabTestStatus]
     entered_by_id: Optional[int]
 
-
 # schemas.py
 
 class SimplePatient(BaseModel):

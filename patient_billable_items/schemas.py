@@ -25,7 +25,7 @@ class PatientBillableItemUpdate(BaseModel):
 
 class PatientBillableItemOut(PatientBillableItemBase):
     id: int
-    date: datetime
+    date_created: datetime
 
     class Config:
         orm_mode = True

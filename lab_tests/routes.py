@@ -4,6 +4,7 @@ from typing import List
 from lab_tests.models import LabTest
 from lab_tests.schemas import LabTestCreate, LabTestOut, LabTestUpdate
 from users.db import get_db
+from datetime import datetime
 
 router = APIRouter(prefix="/lab-tests", tags=["Lab Tests"])
 

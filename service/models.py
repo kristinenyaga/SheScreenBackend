@@ -16,7 +16,7 @@ class CervicalCancerService(Base):
     name = Column(String(100), unique=True, nullable=False)
     slug = Column(String(100), unique=True)
     description = Column(Text, nullable=True)
-    category = Column(Enum(ServiceCategory), nullable=False)
+    category = Column(Enum(ServiceCategory))
 
     service_cost = relationship("ServiceCost", back_populates="service", uselist=False)
     resource_requirements = relationship("ServiceResourceRequirement", back_populates="service")
