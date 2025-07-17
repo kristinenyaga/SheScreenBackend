@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey,Boolean,Float
+from sqlalchemy import Column, Integer, String, Date, DateTime, ForeignKey,Boolean,Float,Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from datetime import datetime, timezone
@@ -69,3 +69,34 @@ class RiskPrediction(Base):
         "Recommendation", back_populates="risk_prediction", uselist=False)
 
 
+class Recommendation(Base):
+    __tablename__ = "recommendations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
+    risk_prediction_id = Column(Integer, ForeignKey("risk_predictions.id"), nullable=True)
+    
+    # Input data for recommendation
+    age = Column(Integer, nullable=False)
+    number_of_sexual_partners = Column(Integer, nullable=False)
+    first_sexual_intercourse_age = Column(Integer, nullable=False)
+    smoking_status = Column(String(10), nullable=False)
+    stds_history = Column(String(10), nullable=False)
+    hpv_current_test_result = Column(String(20), nullable=False)
+    pap_smear_result = Column(String(20), nullable=False)
+    screening_type_last = Column(String(50), nullable=True)
+    
+    # Recommendation results
+    category = Column(String(100), nullable=False)
+    options = Column(Text, nullable=False)  # JSON string of options
+    context = Column(Text, nullable=True)   # JSON string of context
+    confidence = Column(Float, nullable=False)
+    method = Column(String(50), nullable=False, default="ML model")  # ML model or clinical_rules
+    prediction_label = Column(Integer, nullable=True)
+    prediction_probabilities = Column(Text, nullable=True)  # JSON string of probabilities
+    
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
+    # Relationships
+    patient = relationship("Patient", back_populates="recommendations")
+    risk_prediction = relationship("RiskPrediction", back_populates="recommendation", uselist=False)

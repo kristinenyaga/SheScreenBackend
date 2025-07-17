@@ -30,8 +30,6 @@ full_risk_pipeline = joblib.load("pipelines/cervical_cancer_risk_pipeline.pkl")
 with open('selected_feature_names.pkl', 'rb') as f:
     selected_feature_names = pickle.load(f)
 
-
-
 selected_feature_names = []
 
 # Probability thresholds

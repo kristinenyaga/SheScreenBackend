@@ -7,7 +7,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from users.db import get_db
-from patients.schemas import PatientCreate, PatientOut, PatientUpdate
+from patients.schemas import PatientCreate, PatientOut, PatientUpdate, RecommendationRequest, RecommendationResponse
 from datetime import timedelta
 from datetime import date
 
@@ -16,6 +16,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from patients import auth, models, schemas, security
 from users.db import get_db
 from patients.risk_prediction import predict_risk, RiskPredictionData
+from patients.recommendation_prediction import get_recommendation, RecommendationPredictionData
 from chat.prompts import generate_context, qa_template
 from chat.conversation_cache import conversation_cache
 from messages import models as messages_models
@@ -25,6 +26,8 @@ from groq import Groq
 from dotenv import load_dotenv, find_dotenv
 import os
 import numpy as np
+import json
+        
 
 load_dotenv(find_dotenv())
 
@@ -69,7 +72,6 @@ def get_patients_with_risk(db: Session = Depends(get_db)):
     results = []
 
     for patient in patients:
-        # Get latest risk prediction (if any)
         latest_risk = (
             db.query(models.RiskPrediction)
             .filter(models.RiskPrediction.patient_id == patient.id)
@@ -77,10 +79,8 @@ def get_patients_with_risk(db: Session = Depends(get_db)):
             .first()
         )
 
-        # Get risk level or None
         risk_level = latest_risk.risk_level if latest_risk else None
 
-        # Convert Patient ORM → dict and append risk_level
         patient_data = schemas.PatientOut.from_orm(patient).dict()
         patient_data["risk_level"] = risk_level
 
@@ -164,6 +164,55 @@ def get_logged_in_patient(current_user: models.Patient = Depends(auth.get_curren
     return current_user
 
 
+@router.get("/profile/complete")
+def get_complete_patient_profile(
+    current_user: models.Patient = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        latest_risk = (
+            db.query(models.RiskPrediction)
+            .filter(models.RiskPrediction.patient_id == current_user.id)
+            .order_by(models.RiskPrediction.created_at.desc())
+            .first()
+        )
+        
+        latest_recommendation = (
+            db.query(models.Recommendation)
+            .filter(models.Recommendation.patient_id == current_user.id)
+            .order_by(models.Recommendation.created_at.desc())
+            .first()
+        )
+        
+        recent_recommendations = (
+            db.query(models.Recommendation)
+            .filter(models.Recommendation.patient_id == current_user.id)
+            .order_by(models.Recommendation.created_at.desc())
+            .limit(5)
+            .all()
+        )
+        
+        patient_data = schemas.PatientOut.from_orm(current_user).dict()
+        
+        profile_data = {
+            **patient_data,
+            "latest_risk_assessment": latest_risk,
+            "latest_recommendation": latest_recommendation,
+            "recent_recommendations": recent_recommendations,
+            "has_risk_assessment": latest_risk is not None,
+            "has_recommendations": latest_recommendation is not None,
+            "total_recommendations": len(recent_recommendations)
+        }
+        
+        return profile_data
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving complete profile: {str(e)}"
+        )
+
+
 @router.get("/conversation")
 async def read_conversation(
     query: str,
@@ -176,7 +225,6 @@ async def read_conversation(
     if not db_user:
         raise HTTPException(status_code=404, detail="models.Patient not found")
 
-    # Get previous conversation context
     conversation_context = conversation_cache.get_recent_context(
         current_user.id, max_messages=6)
 
@@ -188,7 +236,6 @@ async def read_conversation(
         question=query
     )
 
-    # Add conversation history if available
     if conversation_context:
         enhanced_prompt += f"\n\nPrevious conversation context:\n{conversation_context}\n\nPlease consider this context when responding."
 
@@ -246,7 +293,6 @@ async def read_conversation(
         )
         raw_response = completion.choices[0].message.content
 
-        # conversation to memory cache
         conversation_cache.add_message(
             current_user.id, query, is_bot_message=False)
         conversation_cache.add_message(
@@ -294,7 +340,6 @@ async def create_risk_assessment(
         (today.month, today.day) < (
             patient.date_of_birth.month, patient.date_of_birth.day)
     )
-    # Create prediction data
     prediction_data = RiskPredictionData(
         age=float(age),
         number_of_sexual_partners=risk_data.number_of_sexual_partners,
@@ -305,12 +350,10 @@ async def create_risk_assessment(
         hpv_vaccinated=risk_data.hpv_vaccinated
     )
 
-    # Get risk prediction
     prediction_result = predict_risk(prediction_data)
     screening_recommendations = prediction_result.get(
         "screening_recommendations", {})
 
-    # Save to database
     db_prediction = models.RiskPrediction(
         patient_id=risk_data.patient_id,
         number_of_sexual_partners=risk_data.number_of_sexual_partners,
@@ -338,6 +381,119 @@ async def create_risk_assessment(
     db.refresh(db_prediction)
 
     return db_prediction
+
+
+@router.post("/recommendation", response_model=RecommendationResponse)
+async def get_patient_recommendation(
+    recommendation_request: RecommendationRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        patient = db.query(models.Patient).filter(
+            models.Patient.id == recommendation_request.patient_id).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        recommendation_data = RecommendationPredictionData(
+            age=recommendation_request.age,
+            number_of_sexual_partners=recommendation_request.number_of_sexual_partners,
+            first_sexual_intercourse=recommendation_request.first_sexual_intercourse_age,
+            smoking_status=recommendation_request.smoking_status,
+            stds_history=recommendation_request.stds_history,
+            hpv_current_test_result=recommendation_request.hpv_current_test_result,
+            pap_smear_result=recommendation_request.pap_smear_result,
+            screening_type_last=recommendation_request.screening_type_last
+        )
+        
+        recommendation_result = get_recommendation(recommendation_data)
+        
+        db_recommendation = models.Recommendation(
+            patient_id=recommendation_request.patient_id,
+            age=recommendation_request.age,
+            number_of_sexual_partners=recommendation_request.number_of_sexual_partners,
+            first_sexual_intercourse_age=recommendation_request.first_sexual_intercourse_age,
+            smoking_status=recommendation_request.smoking_status,
+            stds_history=recommendation_request.stds_history,
+            hpv_current_test_result=recommendation_request.hpv_current_test_result,
+            pap_smear_result=recommendation_request.pap_smear_result,
+            screening_type_last=recommendation_request.screening_type_last,
+            category=recommendation_result.get("category", "Unknown"),
+            options=json.dumps(recommendation_result.get("options", [])),
+            context=json.dumps(recommendation_result.get("context", [])),
+            confidence=recommendation_result.get("confidence", 0.0),
+            method=recommendation_result.get("method", "ML model"),
+            prediction_label=recommendation_result.get("prediction_label"),
+            prediction_probabilities=json.dumps(recommendation_result.get("prediction_probabilities", []))
+        )
+        
+        db.add(db_recommendation)
+        db.commit()
+        db.refresh(db_recommendation)
+        
+        return recommendation_result
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error generating recommendation: {str(e)}"
+        )
+
+
+@router.get("/recommendation/{patient_id}", response_model=List[schemas.RecommendationInDB])
+async def get_patient_recommendations(
+    patient_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        patient = db.query(models.Patient).filter(
+            models.Patient.id == patient_id).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        recommendations = db.query(models.Recommendation).filter(
+            models.Recommendation.patient_id == patient_id
+        ).order_by(models.Recommendation.created_at.desc()).all()
+        
+        return recommendations
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving recommendations: {str(e)}"
+        )
+
+
+@router.get("/recommendation/{patient_id}/latest", response_model=schemas.RecommendationInDB)
+async def get_latest_patient_recommendation(
+    patient_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        patient = db.query(models.Patient).filter(
+            models.Patient.id == patient_id).first()
+        
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
+        
+        latest_recommendation = db.query(models.Recommendation).filter(
+            models.Recommendation.patient_id == patient_id
+        ).order_by(models.Recommendation.created_at.desc()).first()
+        
+        if not latest_recommendation:
+            raise HTTPException(
+                status_code=404, 
+                detail="No recommendations found for this patient"
+            )
+        
+        return latest_recommendation
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error retrieving latest recommendation: {str(e)}"
+        )
 
 
 def is_service_available(service_name: str, db: Session) -> bool:
@@ -372,7 +528,6 @@ async def get_risk_prediction(
     
     patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
 
-    # Get latest risk prediction
     latest_prediction = db.query(models.RiskPrediction).filter(
         models.RiskPrediction.patient_id == patient_id
     ).order_by(models.RiskPrediction.created_at.desc()).first()
