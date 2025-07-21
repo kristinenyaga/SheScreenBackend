@@ -21,3 +21,4 @@ class CervicalCancerService(Base):
 
     service_cost = relationship("ServiceCost", back_populates="service", uselist=False)
     resource_requirements = relationship("ServiceResourceRequirement", back_populates="service")
+    usage_logs = relationship("UsageLog", back_populates="service")

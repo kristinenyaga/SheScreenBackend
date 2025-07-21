@@ -211,6 +211,15 @@ class FinalizedByUser(BaseModel):
         from_attributes = True
 
 
+class SimplePatient(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    patient_code: str
+
+    class Config:
+        orm_mode = True
+
 class RecommendationInDB(BaseModel):
     id: int
     patient_id: int
@@ -234,6 +243,13 @@ class RecommendationInDB(BaseModel):
     finalized_by_user_id: Optional[int]
     finalized_by: Optional[FinalizedByUser]
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GetRecommendationInDB(RecommendationInDB):
+    patient:SimplePatient
 
     class Config:
         from_attributes = True

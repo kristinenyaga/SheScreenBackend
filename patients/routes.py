@@ -14,7 +14,6 @@ from datetime import date
 from fastapi.security import OAuth2PasswordRequestForm
 
 from patients import auth, models, schemas, security
-from users.db import get_db
 from patients.risk_prediction import predict_risk, RiskPredictionData
 from patients.recommendation_prediction import get_recommendation, RecommendationPredictionData
 from chat.prompts import generate_context, qa_template
@@ -32,7 +31,8 @@ import json
 load_dotenv(find_dotenv())
 
 client = Groq()
-router = APIRouter(prefix="/patients")
+router = APIRouter(prefix="/patients", tags=["Patients"])
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -85,6 +85,76 @@ def get_patients_with_risk(db: Session = Depends(get_db)):
         patient_data["risk_level"] = risk_level
 
         results.append(patient_data)
+
+    return results
+
+
+@router.get("/get-risk-assessments", response_model=List[schemas.RiskPredictionResponse])
+async def get_all_risk_predictions(
+    db: Session = Depends(get_db)
+):
+    predictions = db.query(models.RiskPrediction).order_by(
+        models.RiskPrediction.created_at.desc()).all()
+
+    print(predictions)
+
+    if not predictions:
+        raise HTTPException(
+            status_code=404, detail="No risk predictions found")
+
+    results = []
+
+    for prediction in predictions:
+        patient = db.query(models.Patient).filter(
+            models.Patient.id == prediction.patient_id).first()
+        if not patient:
+            continue
+
+        screening_recommendations = {
+            "recommended_screenings": prediction.recommended_screenings.split(",") if prediction.recommended_screenings else [],
+            "reason": prediction.reason or "",
+            "urgency": prediction.urgency or "Unknown",
+            "frequency": prediction.frequency or "",
+            "additional_services": prediction.additional_services.split(",") if prediction.additional_services else []
+        }
+
+        prediction_result = {
+            "risk_probability": prediction.risk_probability,
+            "interpretation": prediction.interpretation,
+            "screening_recommendations": screening_recommendations
+        }
+
+        risk_data = {
+            "age": float(prediction.age_at_assessment),
+            "number_of_sexual_partners": prediction.number_of_sexual_partners,
+            "first_sexual_intercourse": prediction.first_sexual_intercourse_age,
+            "smoking_status": prediction.smoking_status,
+            "stds_history": prediction.stds_history,
+            "hpv_test_result": prediction.hpv_test_result,
+            "hpv_vaccinated": prediction.hpv_vaccinated
+        }
+
+        availability_info = []
+        for service_name in screening_recommendations.get("recommended_screenings", []):
+            available = is_service_available(service_name, db)
+            availability_info.append({
+                "service": service_name,
+                "available": available
+            })
+
+        results.append({
+            "id": prediction.id,
+            "patient_id": prediction.patient_id,
+            "risk_assessment": risk_data,
+            "prediction": prediction_result,
+            "summary": {
+                "risk_level": screening_recommendations.get("urgency", "Unknown"),
+                "next_steps": screening_recommendations.get("recommended_screenings", []),
+                "reason": screening_recommendations.get("reason", ""),
+                "additional_services": screening_recommendations.get("additional_services", []),
+                "availability": availability_info
+            }
+        })
 
     return results
 
@@ -304,6 +374,7 @@ async def read_conversation(
     return structure_response(query, raw_response)
 
 
+
 @router.post("/risk-assessment", response_model=schemas.RiskPredictionInDB)
 async def create_risk_assessment(
     risk_data: schemas.RiskAssessmentCreate,
@@ -381,6 +452,78 @@ async def create_risk_assessment(
     db.refresh(db_prediction)
 
     return db_prediction
+
+
+
+@router.get("/risk-prediction/{patient_id}", response_model=schemas.RiskPredictionResponse)
+async def get_risk_prediction(
+    patient_id: int,
+    db: Session = Depends(get_db)
+):
+
+    patient = db.query(models.Patient).filter(
+        models.Patient.id == patient_id).first()
+
+    latest_prediction = db.query(models.RiskPrediction).filter(
+        models.RiskPrediction.patient_id == patient_id
+    ).order_by(models.RiskPrediction.created_at.desc()).first()
+
+    if not latest_prediction:
+        raise HTTPException(
+            status_code=400,
+            detail="No risk assessment found. Please create a risk assessment first."
+        )
+
+    screening_recommendations = {
+        "recommended_screenings": latest_prediction.recommended_screenings.split(",") if latest_prediction.recommended_screenings else [],
+        "reason": latest_prediction.reason or "",
+        "urgency": latest_prediction.urgency or "Unknown",
+        "frequency": latest_prediction.frequency or "",
+        "additional_services": latest_prediction.additional_services.split(",") if latest_prediction.additional_services else []
+    }
+
+    prediction_result = {
+        "risk_probability": latest_prediction.risk_probability,
+        "interpretation": latest_prediction.interpretation,
+        "screening_recommendations": screening_recommendations
+    }
+
+    risk_data = {
+        "age": float(latest_prediction.age_at_assessment),
+        "number_of_sexual_partners": latest_prediction.number_of_sexual_partners,
+        "first_sexual_intercourse": latest_prediction.first_sexual_intercourse_age,
+        "smoking_status": latest_prediction.smoking_status,
+        "stds_history": latest_prediction.stds_history,
+        "hpv_test_result": latest_prediction.hpv_test_result,
+        "hpv_vaccinated": latest_prediction.hpv_vaccinated
+    }
+
+    # Get facility recommendations
+    recommended_screenings = screening_recommendations.get(
+        "recommended_screenings", [])
+    print("recommended_screenings", recommended_screenings)
+    availability_info = []
+    for service_name in recommended_screenings:
+        available = is_service_available(service_name, db)
+        availability_info.append({
+            "service": service_name,
+            "available": available
+        })
+
+    return {
+        "id": latest_prediction.id,
+        "patient_id": patient.id,
+        "risk_assessment": risk_data,
+        "prediction": prediction_result,
+        "summary": {
+            "risk_level": screening_recommendations.get("urgency", "Unknown"),
+            "next_steps": screening_recommendations.get("recommended_screenings", []),
+            "reason": screening_recommendations.get("reason", ""),
+            "additional_services": screening_recommendations.get("additional_services", []),
+            "availability": availability_info
+            # "location_note": f"Found {len(same_region_facilities)} facilities in your region ({db_user.region})" if db_user.region and same_region_facilities else "Consider updating your region for better facility recommendations"
+        }
+    }
 
 
 @router.post("/followup", response_model=schemas.RecommendationInDB)
@@ -465,7 +608,7 @@ async def get_patient_recommendations(
         )
 
 
-@router.get("/patientfollowup/{follow_up_id}", response_model=schemas.RecommendationInDB)
+@router.get("/patientfollowup/{follow_up_id}", response_model=schemas.GetRecommendationInDB)
 def get_follow_up(follow_up_id: int, db: Session = Depends(get_db)):
     follow_up = db.query(models.FollowUp).filter(models.FollowUp.id == follow_up_id).first()
     if not follow_up:
@@ -544,92 +687,7 @@ def is_service_available(service_name: str, db: Session) -> bool:
 
     return True
 
-@router.get("/risk-prediction/{patient_id}", response_model=schemas.RiskPredictionResponse)
-async def get_risk_prediction(
-    patient_id:int,
-    db: Session = Depends(get_db)
-):
-    
-    patient = db.query(models.Patient).filter(models.Patient.id == patient_id).first()
 
-    latest_prediction = db.query(models.RiskPrediction).filter(
-        models.RiskPrediction.patient_id == patient_id
-    ).order_by(models.RiskPrediction.created_at.desc()).first()
-
-    if not latest_prediction:
-        raise HTTPException(
-            status_code=400,
-            detail="No risk assessment found. Please create a risk assessment first."
-        )
-
-    screening_recommendations = {
-        "recommended_screenings": latest_prediction.recommended_screenings.split(",") if latest_prediction.recommended_screenings else [],
-        "reason": latest_prediction.reason or "",
-        "urgency": latest_prediction.urgency or "Unknown",
-        "frequency": latest_prediction.frequency or "",
-        "additional_services": latest_prediction.additional_services.split(",") if latest_prediction.additional_services else []
-    }
-
-    prediction_result = {
-        "risk_probability": latest_prediction.risk_probability,
-        "interpretation": latest_prediction.interpretation,
-        "screening_recommendations": screening_recommendations
-    }
-
-    risk_data = {
-        "age": float(latest_prediction.age_at_assessment),
-        "number_of_sexual_partners": latest_prediction.number_of_sexual_partners,
-        "first_sexual_intercourse": latest_prediction.first_sexual_intercourse_age,
-        "smoking_status": latest_prediction.smoking_status,
-        "stds_history": latest_prediction.stds_history,
-        "hpv_test_result": latest_prediction.hpv_test_result,
-        "hpv_vaccinated": latest_prediction.hpv_vaccinated
-    }
-
-    # Get facility recommendations
-    recommended_screenings = screening_recommendations.get(
-        "recommended_screenings", [])
-    print("recommended_screenings", recommended_screenings)
-    availability_info = []
-    for service_name in recommended_screenings:
-        available = is_service_available(service_name, db)
-        availability_info.append({
-            "service": service_name,
-            "available": available
-            })
-
-    return {
-        "id":latest_prediction.id,
-        "patient_id": patient.id,
-        "risk_assessment": risk_data,
-        "prediction": prediction_result,
-        "summary": {
-            "risk_level": screening_recommendations.get("urgency", "Unknown"),
-            "next_steps": screening_recommendations.get("recommended_screenings", []),
-            "reason": screening_recommendations.get("reason", ""),
-            "additional_services": screening_recommendations.get("additional_services", []),
-            "availability": availability_info
-            # "location_note": f"Found {len(same_region_facilities)} facilities in your region ({db_user.region})" if db_user.region and same_region_facilities else "Consider updating your region for better facility recommendations"
-        }
-    }
-
-
-# @router.get("/risk-prediction/{patient_id}", response_model=schemas.RiskPredictionHistory)
-# async def get_risk_prediction_history(
-#     patient_id: int,
-#     db: Session = Depends(get_db)
-# ):
-#     predictions = db.query(models.RiskPrediction).filter(
-#         models.RiskPrediction.patient_id == patient_id
-#     ).order_by(models.RiskPrediction.created_at.desc()).all()
-
-#     latest_prediction = predictions[0] if predictions else None
-
-#     return {
-#         "predictions": predictions,
-#         "total_count": len(predictions),
-#         "latest_prediction": latest_prediction
-#     }
 
 
 @router.get("/conversation-history")

@@ -4,6 +4,15 @@ from users.db import Base
 import enum
 
 
+class ResourceType(str, enum.Enum):
+    CONSUMABLE = "consumable"
+    REUSABLE = "reusable"
+
+
+class ResourceClassification(str, enum.Enum):
+    PHARMACOLOGICAL = "pharmacological"
+    NON_PHARMACOLOGICAL = "non-pharmacological"
+
 class Resource(Base):
     __tablename__ = "resources"
 
@@ -13,5 +22,8 @@ class Resource(Base):
     unit_of_measure = Column(String(50), nullable=False)
     quantity_available = Column(Integer, nullable=False, default=0)
     low_stock_threshold = Column(Integer, nullable=False, default=0)
+    classification = Column(Enum(ResourceClassification), nullable=False)
+    resource_type = Column(Enum(ResourceType), nullable=False)
 
     service_requirements = relationship("ServiceResourceRequirement", back_populates="resource")
+    usage_logs = relationship("UsageLog", back_populates="resource")

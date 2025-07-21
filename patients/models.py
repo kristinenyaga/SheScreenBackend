@@ -32,6 +32,8 @@ class Patient(Base):
     lab_tests = relationship("LabTest", back_populates="patient")
     billable_items = relationship("PatientBillableItem", back_populates="patient")
     follow_up_plans = relationship("FollowUp", back_populates="patient")
+    usage_logs = relationship("UsageLog", back_populates="patient")
+
 
 
 

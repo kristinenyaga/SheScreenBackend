@@ -21,6 +21,7 @@ class ServiceCostUpdate(BaseModel):
 
 
 class CervicalCancerServiceBase(BaseModel):
+    id:int
     name: str
     description: str | None = None
 
