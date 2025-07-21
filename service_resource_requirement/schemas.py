@@ -1,0 +1,13 @@
+from pydantic import BaseModel
+from typing import Optional
+
+
+class ServiceResourceRequirementResponse(BaseModel):
+    id: int
+    service_id: int
+    resource_id: int
+    required_quantity: int
+
+    class Config:
+        from_attributes = True
+
