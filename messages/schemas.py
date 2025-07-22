@@ -4,7 +4,8 @@ from typing import Optional
 
 
 class MessageCreate(BaseModel):
-    receiver_id: int
+    receiver_patient_id: int
+    sender_user_id: int
     content: str
 
 
@@ -14,13 +15,16 @@ class BotConversationCreate(BaseModel):
 
 class MessageOut(BaseModel):
     id: int
-    sender_id: Optional[int] = None
-    receiver_id: Optional[int] = None
-    user_id: Optional[int] = None
+    sender_user_id: Optional[int] = None
+    receiver_patient_id: Optional[int] = None
     content: str
-    is_bot_message: int
+    is_bot_message: bool
     conversation_type: str
     timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
 
     class Config:
         from_attributes = True

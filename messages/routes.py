@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from messages import models as messages_models
+from patients.models import Patient
 from users.db import get_db
 from users.auth import get_current_user
 from messages.schemas import MessageCreate, MessageOut, BotConversationOut
@@ -15,6 +16,7 @@ SMS_API_KEY = "5075367cbe1a8d1284c158b4975615fb"
 SMS_PARTNER_ID = "13831"
 SMS_SENDER_ID = "TextSMS"
 
+
 @router.post("/send", response_model=MessageOut)
 def send_message(
     message: MessageCreate,
@@ -22,26 +24,28 @@ def send_message(
     current_user: users_models.User = Depends(get_current_user),
 ):
     db_message = messages_models.Message(
-        sender_id=current_user.id,
-        receiver_id=message.receiver_id,
+        sender_user_id=current_user.id,
+        receiver_patient_id=message.receiver_patient_id,
         content=message.content,
     )
     db.add(db_message)
     db.commit()
     db.refresh(db_message)
-    receiver = db.query(users_models.User).filter(
-        users_models.User.id == message.receiver_id).first()
-    print(receiver)
+
+    receiver = db.query(Patient).filter(
+        Patient.id == message.receiver_patient_id).first()
+
     if not receiver or not receiver.phone_number:
         raise HTTPException(
-            status_code=404, detail="Receiver or phone number not found")
+            status_code=404, detail="Receiver or phone number not found"
+        )
 
     sms_payload = {
         "apikey": SMS_API_KEY,
         "partnerID": SMS_PARTNER_ID,
         "message": message.content,
         "shortcode": SMS_SENDER_ID,
-        "mobile": receiver.phone_number  
+        "mobile": receiver.phone_number,
     }
 
     try:
@@ -52,6 +56,7 @@ def send_message(
             status_code=500, detail=f"Failed to send SMS: {str(e)}")
 
     return db_message
+
 
 
 @router.post("/save-bot-conversation")
