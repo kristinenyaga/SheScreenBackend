@@ -16,6 +16,7 @@ class PatientBase(BaseModel):
 
 class PatientCreate(PatientBase):
     created_by_id: int
+    patient_code:int
 
 
 

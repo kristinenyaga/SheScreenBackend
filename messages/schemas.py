@@ -3,10 +3,13 @@ from datetime import datetime
 from typing import Optional
 
 
+class FollowUpMessageCreate(BaseModel):
+    patient_id: int
+    plan_summary: str
 class MessageCreate(BaseModel):
     receiver_patient_id: int
-    sender_user_id: int
-    content: str
+    test_name:str
+    result:str
 
 
 class BotConversationCreate(BaseModel):

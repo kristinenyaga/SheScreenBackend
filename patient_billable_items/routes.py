@@ -80,3 +80,18 @@ def get_billable_items_with_total(patient_id: int, db: Session = Depends(get_db)
         "items": items,
         "total_cost": round(total, 2)
     }
+
+
+@router.patch("/mark-paid/{item_id}", response_model=schemas.PatientBillableItemOut)
+def mark_item_as_paid(
+    item_id: int,
+    db: Session = Depends(get_db)
+):
+    item = db.query(PatientBillableItem).get(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    item.paid = True
+    db.commit()
+    db.refresh(item)
+    return item

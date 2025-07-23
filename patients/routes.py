@@ -21,7 +21,7 @@ from chat.conversation_cache import conversation_cache
 from messages import models as messages_models
 from service import models as service_models
 from groq import Groq
-
+import httpx
 from dotenv import load_dotenv, find_dotenv
 import os
 import numpy as np
@@ -29,10 +29,13 @@ import json
         
 
 load_dotenv(find_dotenv())
-
 client = Groq()
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
+SMS_API_URL = "https://sms.textsms.co.ke/api/services/sendsms/"
+SMS_API_KEY = "5075367cbe1a8d1284c158b4975615fb"
+SMS_PARTNER_ID = "13831"
+SMS_SENDER_ID = "TextSMS"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -44,6 +47,30 @@ def generate_random_password(length: int = 10):
 
 def get_password_hash(password: str):
     return pwd_context.hash(password)
+
+
+def send_login_credentials_sms(phone_number: str, first_name: str, email: str, password: str):
+    message = (
+        f"Hello {first_name}, your SheScreen account has been created.\n"
+        f"Login Email: {email}\n"
+        f"Password: {password}\n"
+        "You can now log in and access your screening results. Call 0712 345 678 for help."
+    )
+
+    sms_payload = {
+        "apikey": SMS_API_KEY,
+        "partnerID": SMS_PARTNER_ID,
+        "message": message,
+        "shortcode": SMS_SENDER_ID,
+        "mobile": phone_number,
+    }
+
+    try:
+        response = httpx.post(SMS_API_URL, json=sms_payload)
+        response.raise_for_status()
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send SMS: {str(e)}")
 
 
 @router.post("/", response_model=PatientOut)
@@ -60,11 +87,20 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_patient)
 
-    # email or SMS utility here
-    # send_password_to_user(email=patient.email, password=raw_password)
+    if db_patient.phone_number:
+        send_login_credentials_sms(
+            phone_number=db_patient.phone_number,
+            first_name=db_patient.first_name,
+            email=db_patient.email,
+            password=raw_password
+        )
 
     return db_patient
 
+
+@router.get("/me", response_model=PatientOut)
+def get_profile(current_user: models.Patient = Depends(auth.get_current_user)):
+    return current_user
 
 @router.get("/", response_model=List[schemas.PatientWithRisk])
 def get_patients_with_risk(db: Session = Depends(get_db)):
@@ -157,6 +193,97 @@ async def get_all_risk_predictions(
         })
 
     return results
+
+
+@router.get("/conversation")
+async def read_conversation(
+    query: str,
+    include_history: bool = False,
+    include_context: bool = False,
+    current_user: models.Patient = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    db_user = auth.get_user(db, email=current_user.email)
+    if not db_user:
+        raise HTTPException(status_code=404, detail="models.Patient not found")
+
+    conversation_context = conversation_cache.get_recent_context(
+        current_user.id, max_messages=6)
+
+    context = generate_context(db_user)
+
+    enhanced_prompt = qa_template.format(
+        email=db_user.email,
+        context=context,
+        question=query
+    )
+
+    if conversation_context:
+        enhanced_prompt += f"\n\nPrevious conversation context:\n{conversation_context}\n\nPlease consider this context when responding."
+
+    def classify_intent(query: str) -> str:
+        q = query.lower()
+        if "what is" in q or "definition" in q:
+            return "definition"
+        elif "symptom" in q:
+            return "symptoms"
+        elif "treatment" in q or "treat" in q:
+            return "treatment"
+        elif "prevent" in q or "vaccine" in q:
+            return "prevention"
+        elif "help" in q or "support" in q or "feel" in q:
+            return "support"
+        else:
+            return "generic"
+
+    def structure_response(query: str, raw_response: str) -> dict:
+        intent = classify_intent(query)
+
+        clean_response = raw_response.strip()
+
+        return {
+            "intent": intent,
+            "response": clean_response,
+            "formatted": format_for_display(intent, clean_response),
+            "conversation_count": conversation_cache.get_conversation_count(current_user.id) + 2,
+            "conversation_history": get_conversation_history_data(current_user.id) if include_history else None,
+            "conversation_context": conversation_cache.get_recent_context(current_user.id, 10) if include_context else None
+        }
+
+    def format_for_display(intent: str, response: str):
+        title_map = {
+            "definition": "Information",
+            "symptoms": "Symptoms",
+            "treatment": "Treatment",
+            "prevention": "Prevention",
+            "support": "Support",
+            "generic": "SheScreenAI"
+        }
+
+        return {
+            "title": title_map.get(intent, "SheScreenAI"),
+            "message": response
+        }
+
+    try:
+        completion = client.chat.completions.create(
+            model="compound-beta",
+            messages=[
+                {"role": "system", "content": enhanced_prompt},
+                {"role": "user", "content": query}
+            ]
+        )
+        raw_response = completion.choices[0].message.content
+
+        conversation_cache.add_message(
+            current_user.id, query, is_bot_message=False)
+        conversation_cache.add_message(
+            current_user.id, raw_response, is_bot_message=True)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM service error: {e}")
+
+    return structure_response(query, raw_response)
 
 @router.get("/{id}", response_model=PatientOut)
 def get_patient(id: int, db: Session = Depends(get_db)):
@@ -282,96 +409,6 @@ def get_complete_patient_profile(
             detail=f"Error retrieving complete profile: {str(e)}"
         )
 
-
-@router.get("/conversation")
-async def read_conversation(
-    query: str,
-    include_history: bool = False,
-    include_context: bool = False,
-    current_user: models.Patient = Depends(auth.get_current_user),
-    db: Session = Depends(get_db)
-):
-    db_user = auth.get_user(db, email=current_user.email)
-    if not db_user:
-        raise HTTPException(status_code=404, detail="models.Patient not found")
-
-    conversation_context = conversation_cache.get_recent_context(
-        current_user.id, max_messages=6)
-
-    context = generate_context(db_user)
-
-    enhanced_prompt = qa_template.format(
-        email=db_user.email,
-        context=context,
-        question=query
-    )
-
-    if conversation_context:
-        enhanced_prompt += f"\n\nPrevious conversation context:\n{conversation_context}\n\nPlease consider this context when responding."
-
-    def classify_intent(query: str) -> str:
-        q = query.lower()
-        if "what is" in q or "definition" in q:
-            return "definition"
-        elif "symptom" in q:
-            return "symptoms"
-        elif "treatment" in q or "treat" in q:
-            return "treatment"
-        elif "prevent" in q or "vaccine" in q:
-            return "prevention"
-        elif "help" in q or "support" in q or "feel" in q:
-            return "support"
-        else:
-            return "generic"
-
-    def structure_response(query: str, raw_response: str) -> dict:
-        intent = classify_intent(query)
-
-        clean_response = raw_response.strip()
-
-        return {
-            "intent": intent,
-            "response": clean_response,
-            "formatted": format_for_display(intent, clean_response),
-            "conversation_count": conversation_cache.get_conversation_count(current_user.id) + 2,
-            "conversation_history": get_conversation_history_data(current_user.id) if include_history else None,
-            "conversation_context": conversation_cache.get_recent_context(current_user.id, 10) if include_context else None
-        }
-
-    def format_for_display(intent: str, response: str):
-        title_map = {
-            "definition": "Information",
-            "symptoms": "Symptoms",
-            "treatment": "Treatment",
-            "prevention": "Prevention",
-            "support": "Support",
-            "generic": "SheScreenAI"
-        }
-
-        return {
-            "title": title_map.get(intent, "SheScreenAI"),
-            "message": response
-        }
-
-    try:
-        completion = client.chat.completions.create(
-            model="compound-beta",
-            messages=[
-                {"role": "system", "content": enhanced_prompt},
-                {"role": "user", "content": query}
-            ]
-        )
-        raw_response = completion.choices[0].message.content
-
-        conversation_cache.add_message(
-            current_user.id, query, is_bot_message=False)
-        conversation_cache.add_message(
-            current_user.id, raw_response, is_bot_message=True)
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"LLM service error: {e}")
-
-    return structure_response(query, raw_response)
 
 
 
