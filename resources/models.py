@@ -5,13 +5,13 @@ import enum
 
 
 class ResourceType(str, enum.Enum):
-    CONSUMABLE = "consumable"
-    REUSABLE = "reusable"
+    CONSUMABLE = "CONSUMABLE"
+    REUSABLE = "REUSABLE"
 
 
 class ResourceClassification(str, enum.Enum):
-    PHARMACOLOGICAL = "pharmacological"
-    NON_PHARMACOLOGICAL = "non-pharmacological"
+    PHARMACOLOGICAL = "PHARMACOLOGICAL"
+    NON_PHARMACOLOGICAL = "NON_PHARMACOLOGICAL"
 
 class Resource(Base):
     __tablename__ = "resources"
