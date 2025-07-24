@@ -17,6 +17,8 @@ from service.routes import router as service_routes
 from service_resource_requirement.routes import router as service_resource_requirement_routes
 from service_cost.routes import router as service_cost_routes
 from usage_log.routes import router as usage_log_routes
+from symptom_log.routes import router as symptom_log_routes
+
 app = FastAPI()
 
 app.add_middleware(
@@ -42,6 +44,8 @@ app.include_router(service_routes)
 app.include_router(service_resource_requirement_routes)
 app.include_router(users_routes)
 app.include_router(usage_log_routes)
+app.include_router(symptom_log_routes)
+
 
 
 
