@@ -19,7 +19,7 @@ class LabTest(Base):
     service_id = Column(Integer, ForeignKey("cervical_cancer_services.id"), nullable=False)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
 
-    result = Column(String(50), nullable=True)  # "Positive", "Negative"
+    result = Column(String(50), nullable=True) 
     status = Column(Enum(LabTestStatus), default=LabTestStatus.pending)
 
     ordered_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)

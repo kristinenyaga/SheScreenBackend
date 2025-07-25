@@ -102,27 +102,49 @@ def create_patient(patient: PatientCreate, db: Session = Depends(get_db)):
 def get_profile(current_user: models.Patient = Depends(auth.get_current_user)):
     return current_user
 
-@router.get("/", response_model=List[schemas.PatientWithRisk])
-def get_patients_with_risk(db: Session = Depends(get_db)):
+
+@router.get("/", response_model=List[schemas.PatientSummary])
+def get_patient_summaries(db: Session = Depends(get_db)):
     patients = db.query(models.Patient).all()
-    results = []
+    summaries = []
 
     for patient in patients:
+        # Risk level
         latest_risk = (
             db.query(models.RiskPrediction)
-            .filter(models.RiskPrediction.patient_id == patient.id)
+            .filter_by(patient_id=patient.id)
             .order_by(models.RiskPrediction.created_at.desc())
             .first()
         )
-
         risk_level = latest_risk.risk_level if latest_risk else None
 
-        patient_data = schemas.PatientOut.from_orm(patient).dict()
-        patient_data["risk_level"] = risk_level
+        recs = patient.recommendations
+        recommendation_count = len(recs)
+        latest_recommendation_status = recs[-1].status if recs else None
 
-        results.append(patient_data)
+        labs = patient.lab_tests
+        lab_tests_count = len(labs)
+        latest_lab_test_status = labs[-1].status.value if labs else None
 
-    return results
+        follow_up_finalized = any(
+            f.final_plan is not None for f in patient.follow_up_plans)
+
+        summaries.append(schemas.PatientSummary(
+            id=patient.id,
+            patient_code=patient.patient_code,
+            first_name=patient.first_name,
+            last_name=patient.last_name,
+            phone_number=patient.phone_number,
+            date_of_birth=patient.date_of_birth,
+            risk_level=risk_level,
+            recommendation_count=recommendation_count,
+            latest_recommendation_status=latest_recommendation_status,
+            lab_tests_count=lab_tests_count,
+            latest_lab_test_status=latest_lab_test_status,
+            follow_up_finalized=follow_up_finalized
+        ))
+
+    return summaries
 
 
 @router.get("/get-risk-assessments", response_model=List[schemas.RiskPredictionResponse])

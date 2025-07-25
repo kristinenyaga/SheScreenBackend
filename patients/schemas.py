@@ -3,6 +3,24 @@ from pydantic import BaseModel, EmailStr
 from datetime import date, datetime
 
 
+class PatientSummary(BaseModel):
+    id: int
+    patient_code: str
+    first_name: str
+    last_name: str
+    phone_number: Optional[str]
+    date_of_birth: Optional[date]
+    risk_level: Optional[str]
+
+    recommendation_count: int
+    latest_recommendation_status: Optional[str]
+    lab_tests_count: int
+    latest_lab_test_status: Optional[str]
+    follow_up_finalized: bool
+
+    class Config:
+        from_attributes = True
+
 
 class PatientBase(BaseModel):
     first_name: str

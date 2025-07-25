@@ -5,6 +5,7 @@ from lab_tests.models import LabTest
 from lab_tests.schemas import LabTestCreate, LabTestOut, LabTestUpdate, LabTestStatus, FollowUpAssignment
 from users.db import get_db
 from datetime import datetime
+from recommended_action.models import Recommendation
 
 router = APIRouter(prefix="/lab-tests", tags=["Lab Tests"])
 
@@ -46,13 +47,28 @@ def update_lab_test_result(
         if update_data["status"] == LabTestStatus.completed:
             update_data["date_completed"] = datetime.utcnow()
 
-    for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(lab_test, key, value)
 
+    for key, value in update_data.items():
+        setattr(lab_test, key, value)
 
     db.commit()
     db.refresh(lab_test)
+
+
+    related_tests = db.query(LabTest).filter(
+        LabTest.recommendation_id == lab_test.recommendation_id
+    ).all()
+
+    if all(t.status == LabTestStatus.completed for t in related_tests):
+        recommendation = db.query(Recommendation).filter(
+            Recommendation.id == lab_test.recommendation_id
+        ).first()
+        if recommendation:
+            recommendation.status = "results_entered"
+            db.commit()  
+
     return lab_test
+
 
 
 @router.patch("/{lab_test_id}/assign-follow-up", response_model=LabTestOut)
